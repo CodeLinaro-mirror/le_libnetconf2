@@ -1296,9 +1296,10 @@ error:
     return -1;
 }
 
-API void
+API int
 nc_server_destroy(void)
 {
+    int rc = 0;
     int config_update_locked = 0;
     enum nc_rwlock_mode config_lock_mode = NC_RWLOCK_NONE;
     uint32_t i;
@@ -1315,7 +1316,10 @@ nc_server_destroy(void)
 
 #ifdef NC_ENABLED_SSH_TLS
     /* destroy the certificate expiration notification thread */
-    nc_server_notif_cert_expiration_thread_stop(1);
+    if ((rc = nc_server_notif_cert_expiration_thread_stop(1))) {
+        ERR(NULL, "%s: failed to stop certificate expiration notification thread.", __func__);
+        goto cleanup;
+    }
 #endif /* NC_ENABLED_SSH_TLS */
 
     /* CONFIG UPDATE LOCK, continue on error */
@@ -1382,6 +1386,9 @@ nc_server_destroy(void)
         fclose(server_opts.tls_keylog_file);
     }
 #endif /* NC_ENABLED_SSH_TLS */
+
+cleanup:
+    return rc;
 }
 
 API int
@@ -4753,7 +4760,7 @@ cleanup:
     return ret;
 }
 
-API void
+API int
 nc_server_notif_cert_expiration_thread_stop(int wait)
 {
     int r;
@@ -4761,7 +4768,7 @@ nc_server_notif_cert_expiration_thread_stop(int wait)
 
     /* LOCK */
     if (nc_mutex_lock(&server_opts.cert_exp_notif.lock, NC_CERT_EXP_LOCK_TIMEOUT, __func__) != 1) {
-        return;
+        return 1;
     }
     tid = server_opts.cert_exp_notif.tid;
 
@@ -4780,12 +4787,14 @@ nc_server_notif_cert_expiration_thread_stop(int wait)
         }
         if (r) {
             ERR(NULL, "Stopping the certificate expiration notification thread failed (%s).", strerror(r));
+            return 1;
         }
     } else {
         /* thread is not running */
         /* UNLOCK */
         nc_mutex_unlock(&server_opts.cert_exp_notif.lock, __func__);
     }
+    return 0;
 }
 
 #endif /* NC_ENABLED_SSH_TLS */
