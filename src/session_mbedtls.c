@@ -836,18 +836,22 @@ nc_tls_get_num_certs_wrap(void *chain)
     return n;
 }
 
-void
-nc_tls_get_cert_wrap(void *chain, int idx, void **cert)
+void *
+nc_tls_get_cert_wrap(void *chain, int idx)
 {
     int i;
     mbedtls_x509_crt *iter;
 
+    if (!chain || (idx < 0)) {
+        return NULL;
+    }
+
     iter = chain;
-    for (i = 0; i < idx; i++) {
+    for (i = 0; iter && (i < idx); i++) {
         iter = iter->next;
     }
 
-    *cert = iter;
+    return iter;
 }
 
 int
