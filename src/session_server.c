@@ -1862,154 +1862,281 @@ nc_accept_inout(int fdin, int fdout, const char *username, const struct ly_ctx *
     return msgtype;
 }
 
-static void
-nc_ps_queue_add_id(struct nc_pollsession *ps, uint8_t *id)
+/**
+ * @brief Add this thread into the pollsession queue.
+ *
+ * @note @p ps->lock MUST be held.
+ *
+ * @param[in,out] ps Pollsession structure.
+ * @param[in] preempt Whether this thread preempts the thread that has the turn, meaning it is
+ * added at the very beginning of the queue instead of at its end.
+ * @return 0 on success, -1 on error.
+ */
+static int
+nc_ps_queue_add(struct nc_pollsession *ps, int preempt)
 {
-    uint8_t q_last;
+    pthread_t *new_queue;
+    uint8_t new_size, idx, i;
 
-    if (ps->queue_len == NC_PS_QUEUE_SIZE) {
-        ERRINT;
-        return;
-    }
-
-    /* get a unique queue value (by adding 1 to the last added value, if any) */
-    if (ps->queue_len) {
-        q_last = (ps->queue_begin + ps->queue_len - 1) % NC_PS_QUEUE_SIZE;
-        *id = ps->queue[q_last] + 1;
-    } else {
-        *id = 0;
-    }
-
-    /* add the id into the queue */
-    ++ps->queue_len;
-    q_last = (ps->queue_begin + ps->queue_len - 1) % NC_PS_QUEUE_SIZE;
-    ps->queue[q_last] = *id;
-}
-
-static void
-nc_ps_queue_remove_id(struct nc_pollsession *ps, uint8_t id)
-{
-    uint8_t i, q_idx, found = 0;
-
-    for (i = 0; i < ps->queue_len; ++i) {
-        /* get the actual queue idx */
-        q_idx = (ps->queue_begin + i) % NC_PS_QUEUE_SIZE;
-
-        if (found) {
-            if (ps->queue[q_idx] == id) {
-                /* another equal value, simply cannot be */
-                ERRINT;
-            }
-            if (found == 2) {
-                /* move the following values */
-                ps->queue[q_idx ? q_idx - 1 : NC_PS_QUEUE_SIZE - 1] = ps->queue[q_idx];
-            }
-        } else if (ps->queue[q_idx] == id) {
-            /* found our id, there can be no more equal valid values */
-            if (i == 0) {
-                found = 1;
-            } else {
-                /* this is not okay, our id is in the middle of the queue */
-                found = 2;
-            }
+    if (ps->queue_len == ps->queue_size) {
+        /* there is no room for another thread, make the queue bigger */
+        if (!ps->queue_size) {
+            new_size = NC_PS_QUEUE_INIT_SIZE;
+        } else if (ps->queue_size == UINT8_MAX) {
+            ERR(NULL, "Too many threads (%" PRIu8 ") accessing a single pollsession.", ps->queue_size);
+            return -1;
+        } else {
+            new_size = ps->queue_size + 1;
         }
-    }
-    if (!found) {
-        ERRINT;
-        return;
+
+        new_queue = malloc(new_size * sizeof *new_queue);
+        NC_CHECK_ERRMEM_RET(!new_queue, -1);
+
+        /* copy the queue over */
+        for (i = 0; i < ps->queue_len; ++i) {
+            new_queue[i] = ps->queue[(ps->queue_begin + i) % ps->queue_size];
+        }
+
+        free(ps->queue);
+        ps->queue = new_queue;
+        ps->queue_size = new_size;
+        ps->queue_begin = 0;
     }
 
-    --ps->queue_len;
-    if (found == 1) {
-        /* remove the id by moving the queue, otherwise all the values in the queue were moved */
-        ps->queue_begin = (ps->queue_begin + 1) % NC_PS_QUEUE_SIZE;
+    if (preempt) {
+        /* queue up in front of everyone, including the thread that has the turn */
+        ps->queue_begin = ps->queue_begin ? ps->queue_begin - 1 : ps->queue_size - 1;
+        idx = ps->queue_begin;
+    } else {
+        /* queue up at the very end */
+        idx = (ps->queue_begin + ps->queue_len) % ps->queue_size;
     }
+
+    ps->queue[idx] = pthread_self();
+    ++ps->queue_len;
+
+    return 0;
 }
 
-int
-nc_ps_lock(struct nc_pollsession *ps, uint8_t *id, const char *func)
+/**
+ * @brief Remove this thread from the pollsession queue.
+ *
+ * @note @p ps->lock MUST be held.
+ *
+ * @param[in,out] ps Pollsession structure.
+ */
+static void
+nc_ps_queue_remove(struct nc_pollsession *ps)
 {
-    int r, rc = 0;
-    struct timespec ts;
+    uint8_t i, idx;
 
-    /* LOCK */
-    if (nc_mutex_lock(&ps->lock, NC_PS_LOCK_TIMEOUT, func) != 1) {
-        return -1;
-    }
-
-    /* check that the queue is long enough */
-    if (ps->queue_len == NC_PS_QUEUE_SIZE) {
-        ERR(NULL, "%s: pollsession queue size (%d) too small.", func, NC_PS_QUEUE_SIZE);
-        nc_mutex_unlock(&ps->lock, func);
-        return -1;
-    }
-
-    /* add ourselves into the queue */
-    nc_ps_queue_add_id(ps, id);
-    DBL(NULL, "PS 0x%p TID %lu queue: added %u, head %u, length %u", ps, (long unsigned int)pthread_self(), *id,
-            ps->queue[ps->queue_begin], ps->queue_len);
-
-    /* is it our turn? */
-    while (ps->queue[ps->queue_begin] != *id) {
-        nc_timeouttime_get(&ts, NC_PS_QUEUE_TIMEOUT);
-
-        r = pthread_cond_clockwait(&ps->cond, &ps->lock, COMPAT_CLOCK_ID, &ts);
-        if (r) {
-            /**
-             * This may happen when another thread releases the lock and broadcasts the condition
-             * and this thread had already timed out. When this thread is scheduled, it returns timed out error
-             * but when actually this thread was ready for condition.
-             */
-            if ((ETIMEDOUT == r) && (ps->queue[ps->queue_begin] == *id)) {
-                break;
-            }
-
-            ERR(NULL, "%s: failed to wait for a pollsession condition (%s).", func, strerror(r));
-            /* remove ourselves from the queue */
-            nc_ps_queue_remove_id(ps, *id);
-            rc = -1;
+    /* find ourselves */
+    for (i = 0; i < ps->queue_len; ++i) {
+        if (pthread_equal(ps->queue[(ps->queue_begin + i) % ps->queue_size], pthread_self())) {
+            idx = i;
             break;
         }
     }
+    if (i == ps->queue_len) {
+        ERRINT;
+        return;
+    }
 
+    if (!idx) {
+        /* the very beginning, simply move the queue */
+        ps->queue_begin = (ps->queue_begin + 1) % ps->queue_size;
+    } else {
+        /* move all the following threads one position forward */
+        for (i = idx; i + 1 < ps->queue_len; ++i) {
+            ps->queue[(ps->queue_begin + i) % ps->queue_size] = ps->queue[(ps->queue_begin + i + 1) % ps->queue_size];
+        }
+    }
+    --ps->queue_len;
+}
+
+/**
+ * @brief Wait for the turn of this thread to work with a pollsession and take it.
+ *
+ * @note @p ps->lock MUST be held and this thread MUST be in the queue.
+ *
+ * @param[in,out] ps Pollsession structure.
+ * @param[in] preempt Whether this thread preempts the turn, timing out is then an error.
+ * @param[in] ts_deadline Absolute time to wait for the turn until, NULL for no timeout. An
+ * already expired deadline means the turn is only taken if it is free right away.
+ * @param[in] func Caller function name for logging.
+ * @return 1 on success and the turn is taken.
+ * @return 0 on timeout, the thread is kept in the queue.
+ * @return -1 on error, the thread is kept in the queue.
+ */
+static int
+nc_ps_queue_wait_turn(struct nc_pollsession *ps, int preempt, const struct timespec *ts_deadline, const char *func)
+{
+    int r;
+
+    /* wait until we are at the beginning of the queue and no one else has the turn */
+    while (!pthread_equal(ps->queue[ps->queue_begin], pthread_self()) || ps->busy) {
+        if (ts_deadline) {
+            r = pthread_cond_clockwait(&ps->cond, &ps->lock, COMPAT_CLOCK_ID, ts_deadline);
+        } else {
+            r = pthread_cond_wait(&ps->cond, &ps->lock);
+        }
+
+        if (r == ETIMEDOUT) {
+            /* the deadline may have expired while another thread was giving the turn up */
+            if (pthread_equal(ps->queue[ps->queue_begin], pthread_self()) && !ps->busy) {
+                break;
+            }
+
+            if (preempt) {
+                /* the thread with the turn gives it up once per poll interval, so it is jammed */
+                ERR(NULL, "%s: timed out waiting for the pollsession turn.", func);
+            }
+            return 0;
+        }
+        if (r) {
+            ERR(NULL, "%s: failed to wait for a pollsession condition (%s).", func, strerror(r));
+            return -1;
+        }
+    }
+
+    /* take the turn, we are at the beginning of the queue */
+    ps->busy = 1;
+
+    return 1;
+}
+
+/**
+ * @brief Take the pollsession lock and the turn to work with it.
+ *
+ * @note @p ps->lock MUST NOT be held.
+ *
+ * @param[in,out] ps Pollsession structure.
+ * @param[in] preempt Whether this thread preempts the poll thread that has the turn.
+ * @param[in] ts_deadline Absolute time to wait for the turn until, NULL for no timeout.
+ * @param[in] func Caller function name for logging.
+ * @return 1 on success and the turn is taken.
+ * @return 0 on timeout.
+ * @return -1 on error.
+ */
+static int
+_nc_ps_lock(struct nc_pollsession *ps, int preempt, const struct timespec *ts_deadline, const char *func)
+{
+    int rc;
+
+    /* LOCK */
+    rc = nc_mutex_clocklock(&ps->lock, ts_deadline, func);
+    if (rc != 1) {
+        if (!rc && preempt) {
+            ERR(NULL, "%s: timed out waiting for the pollsession lock.", func);
+        }
+        return rc;
+    }
+
+    /* add ourselves into the queue */
+    if (nc_ps_queue_add(ps, preempt)) {
+        rc = -1;
+        goto cleanup;
+    }
+
+    /* is it our turn? */
+    rc = nc_ps_queue_wait_turn(ps, preempt, ts_deadline, func);
+    if (rc != 1) {
+        /* remove ourselves from the queue */
+        nc_ps_queue_remove(ps);
+    }
+
+cleanup:
     /* UNLOCK */
     nc_mutex_unlock(&ps->lock, func);
-
     return rc;
 }
 
 int
-nc_ps_unlock(struct nc_pollsession *ps, uint8_t id, const char *func)
+nc_ps_lock(struct nc_pollsession *ps, int preempt, int timeout_ms, const char *func)
 {
-    int r;
+    struct timespec ts_deadline;
 
-    /* LOCK, continue on error */
-    r = nc_mutex_lock(&ps->lock, NC_PS_LOCK_TIMEOUT, func);
+    if (timeout_ms < 0) {
+        /* no timeout */
+        return _nc_ps_lock(ps, preempt, NULL, func);
+    }
 
-    /* we must be the first, it was our turn after all, right? */
-    if (ps->queue[ps->queue_begin] != id) {
-        ERRINT;
-        /* UNLOCK */
-        if (r == 1) {
-            nc_mutex_unlock(&ps->lock, func);
-        }
+    /* an already expired deadline means no waiting at all */
+    nc_timeouttime_get(&ts_deadline, timeout_ms);
+    return _nc_ps_lock(ps, preempt, &ts_deadline, func);
+}
+
+int
+nc_ps_unlock(struct nc_pollsession *ps, const char *func)
+{
+    /* LOCK */
+    if (nc_mutex_lock(&ps->lock, NC_PS_TIMEOUT, func) != 1) {
+        /* the error was logged, the queue must not be read nor modified without the lock */
+        ERR(NULL, "%s: failed to remove a thread from the pollsession queue, it will jam it.", func);
         return -1;
     }
 
-    /* remove ourselves from the queue */
-    nc_ps_queue_remove_id(ps, id);
-    DBL(NULL, "PS 0x%p TID %lu queue: removed %u, head %u, length %u", ps, (long unsigned int)pthread_self(), id,
-            ps->queue[ps->queue_begin], ps->queue_len);
+    assert(ps->busy);
 
-    /* broadcast to all other threads that the queue moved */
+    /* give up the turn, remove ourselves from the queue and let the next thread in */
+    ps->busy = 0;
+    nc_ps_queue_remove(ps);
     pthread_cond_broadcast(&ps->cond);
 
     /* UNLOCK */
-    if (r == 1) {
-        nc_mutex_unlock(&ps->lock, func);
+    nc_mutex_unlock(&ps->lock, func);
+    return 0;
+}
+
+/**
+ * @brief Give the pollsession turn up if another thread preempted it and take it back afterwards.
+ *
+ * A poll thread keeps its turn for as long as its caller asked for, but the other pollsession
+ * operations only walk the session array, so they queue up in front of it instead of waiting.
+ * This detects that and waits for them to finish.
+ *
+ * @note @p ps->lock MUST NOT be held.
+ *
+ * @param[in,out] ps Pollsession structure.
+ * @param[in] ts_deadline Absolute time to wait for the turn back until, NULL for no timeout.
+ * @param[in] func Caller function name for logging.
+ * @return 1 if the turn is held on return.
+ * @return 0 on timeout, the turn is not held and must not be given up by the caller.
+ * @return -1 on error, the turn is not held and must not be given up by the caller.
+ */
+static int
+nc_ps_check_preempt(struct nc_pollsession *ps, const struct timespec *ts_deadline, const char *func)
+{
+    int rc = 1;
+
+    /* LOCK */
+    if (nc_mutex_clocklock(&ps->lock, ts_deadline, func) != 1) {
+        /* the turn was not given up, keep it */
+        return 1;
     }
 
-    return r == 1 ? 0 : -1;
+    /* it is our turn after all, right? */
+    assert(ps->busy);
+
+    if (pthread_equal(ps->queue[ps->queue_begin], pthread_self())) {
+        /* we are still at the beginning of the queue, no one preempted us */
+        goto cleanup;
+    }
+
+    /* give the turn up but keep our position in the queue */
+    ps->busy = 0;
+    pthread_cond_broadcast(&ps->cond);
+
+    /* wait for the preempting threads to give the turn back */
+    rc = nc_ps_queue_wait_turn(ps, 0, ts_deadline, func);
+    if (rc != 1) {
+        nc_ps_queue_remove(ps);
+    }
+
+cleanup:
+    /* UNLOCK */
+    nc_mutex_unlock(&ps->lock, func);
+    return rc;
 }
 
 API struct nc_pollsession *
@@ -2019,8 +2146,8 @@ nc_ps_new(void)
 
     ps = calloc(1, sizeof(struct nc_pollsession));
     NC_CHECK_ERRMEM_RET(!ps, NULL);
-    pthread_cond_init(&ps->cond, NULL);
     pthread_mutex_init(&ps->lock, NULL);
+    pthread_cond_init(&ps->cond, NULL);
 
     return ps;
 }
@@ -2043,8 +2170,9 @@ nc_ps_free(struct nc_pollsession *ps)
     }
 
     free(ps->sessions);
-    pthread_mutex_destroy(&ps->lock);
+    free(ps->queue);
     pthread_cond_destroy(&ps->cond);
+    pthread_mutex_destroy(&ps->lock);
 
     free(ps);
 }
@@ -2052,12 +2180,11 @@ nc_ps_free(struct nc_pollsession *ps)
 API int
 nc_ps_add_session(struct nc_pollsession *ps, struct nc_session *session)
 {
-    uint8_t q_id;
 
     NC_CHECK_ARG_RET(session, ps, session, -1);
 
     /* LOCK */
-    if (nc_ps_lock(ps, &q_id, __func__)) {
+    if (nc_ps_lock(ps, 1, NC_PS_TIMEOUT, __func__) != 1) {
         return -1;
     }
 
@@ -2066,7 +2193,7 @@ nc_ps_add_session(struct nc_pollsession *ps, struct nc_session *session)
     if (!ps->sessions) {
         ERRMEM;
         /* UNLOCK */
-        nc_ps_unlock(ps, q_id, __func__);
+        nc_ps_unlock(ps, __func__);
         return -1;
     }
     ps->sessions[ps->session_count - 1] = calloc(1, sizeof **ps->sessions);
@@ -2074,14 +2201,14 @@ nc_ps_add_session(struct nc_pollsession *ps, struct nc_session *session)
         ERRMEM;
         --ps->session_count;
         /* UNLOCK */
-        nc_ps_unlock(ps, q_id, __func__);
+        nc_ps_unlock(ps, __func__);
         return -1;
     }
     ps->sessions[ps->session_count - 1]->session = session;
     ps->sessions[ps->session_count - 1]->state = NC_PS_STATE_NONE;
 
     /* UNLOCK */
-    return nc_ps_unlock(ps, q_id, __func__);
+    return nc_ps_unlock(ps, __func__);
 }
 
 static int
@@ -2116,20 +2243,19 @@ remove:
 API int
 nc_ps_del_session(struct nc_pollsession *ps, struct nc_session *session)
 {
-    uint8_t q_id;
     int ret, ret2;
 
     NC_CHECK_ARG_RET(session, ps, session, -1);
 
     /* LOCK */
-    if (nc_ps_lock(ps, &q_id, __func__)) {
+    if (nc_ps_lock(ps, 1, NC_PS_TIMEOUT, __func__) != 1) {
         return -1;
     }
 
     ret = _nc_ps_del_session(ps, session, -1);
 
     /* UNLOCK */
-    ret2 = nc_ps_unlock(ps, q_id, __func__);
+    ret2 = nc_ps_unlock(ps, __func__);
 
     return ret || ret2 ? -1 : 0;
 }
@@ -2137,13 +2263,12 @@ nc_ps_del_session(struct nc_pollsession *ps, struct nc_session *session)
 API struct nc_session *
 nc_ps_get_session(const struct nc_pollsession *ps, uint16_t idx)
 {
-    uint8_t q_id;
     struct nc_session *ret = NULL;
 
     NC_CHECK_ARG_RET(NULL, ps, NULL);
 
     /* LOCK */
-    if (nc_ps_lock((struct nc_pollsession *)ps, &q_id, __func__)) {
+    if (nc_ps_lock((struct nc_pollsession *)ps, 1, NC_PS_TIMEOUT, __func__) != 1) {
         return NULL;
     }
 
@@ -2152,7 +2277,7 @@ nc_ps_get_session(const struct nc_pollsession *ps, uint16_t idx)
     }
 
     /* UNLOCK */
-    nc_ps_unlock((struct nc_pollsession *)ps, q_id, __func__);
+    nc_ps_unlock((struct nc_pollsession *)ps, __func__);
 
     return ret;
 }
@@ -2160,14 +2285,13 @@ nc_ps_get_session(const struct nc_pollsession *ps, uint16_t idx)
 API struct nc_session *
 nc_ps_find_session(const struct nc_pollsession *ps, nc_ps_session_match_cb match_cb, void *cb_data)
 {
-    uint8_t q_id;
     uint16_t i;
     struct nc_session *ret = NULL;
 
     NC_CHECK_ARG_RET(NULL, ps, NULL);
 
     /* LOCK */
-    if (nc_ps_lock((struct nc_pollsession *)ps, &q_id, __func__)) {
+    if (nc_ps_lock((struct nc_pollsession *)ps, 1, NC_PS_TIMEOUT, __func__) != 1) {
         return NULL;
     }
 
@@ -2179,7 +2303,7 @@ nc_ps_find_session(const struct nc_pollsession *ps, nc_ps_session_match_cb match
     }
 
     /* UNLOCK */
-    nc_ps_unlock((struct nc_pollsession *)ps, q_id, __func__);
+    nc_ps_unlock((struct nc_pollsession *)ps, __func__);
 
     return ret;
 }
@@ -2187,20 +2311,19 @@ nc_ps_find_session(const struct nc_pollsession *ps, nc_ps_session_match_cb match
 API uint16_t
 nc_ps_session_count(struct nc_pollsession *ps)
 {
-    uint8_t q_id;
     uint16_t session_count;
 
     NC_CHECK_ARG_RET(NULL, ps, 0);
 
     /* LOCK (just for memory barrier so that we read the current value) */
-    if (nc_ps_lock((struct nc_pollsession *)ps, &q_id, __func__)) {
+    if (nc_ps_lock((struct nc_pollsession *)ps, 1, NC_PS_TIMEOUT, __func__) != 1) {
         return 0;
     }
 
     session_count = ps->session_count;
 
     /* UNLOCK */
-    nc_ps_unlock((struct nc_pollsession *)ps, q_id, __func__);
+    nc_ps_unlock((struct nc_pollsession *)ps, __func__);
 
     return session_count;
 }
@@ -2883,9 +3006,9 @@ API int
 nc_ps_poll(struct nc_pollsession *ps, int timeout, struct nc_session **session)
 {
     int ret = NC_PSPOLL_ERROR, r;
-    uint8_t q_id;
     uint16_t i, j;
     struct timespec ts_timeout, ts_cur;
+    const struct timespec *ts_deadline = NULL;
     struct nc_session *cur_session;
     struct nc_ps_session *cur_ps_session;
     struct nc_server_rpc *rpc = NULL;
@@ -2897,24 +3020,29 @@ nc_ps_poll(struct nc_pollsession *ps, int timeout, struct nc_session **session)
         *session = NULL;
     }
 
-    /* PS LOCK */
-    if (nc_ps_lock(ps, &q_id, __func__)) {
-        return NC_PSPOLL_ERROR;
-    }
-
-    if (!ps->session_count) {
-        nc_ps_unlock(ps, q_id, __func__);
-        return NC_PSPOLL_NOSESSIONS;
-    }
-
-    /* fill timespecs */
-    nc_timeouttime_get(&ts_cur, 0);
+    /* fill timespecs, the deadline is kept for the whole call */
     if (timeout > -1) {
         nc_timeouttime_get(&ts_timeout, timeout);
+        ts_deadline = &ts_timeout;
+    }
+
+    /* PS LOCK */
+    r = _nc_ps_lock(ps, 0, ts_deadline, __func__);
+    if (r != 1) {
+        return r ? NC_PSPOLL_ERROR : NC_PSPOLL_TIMEOUT;
     }
 
     /* poll all the sessions one-by-one */
     do {
+        if (!ps->session_count) {
+            /* there were none to begin with or they were all removed while we did not have the turn */
+            nc_ps_unlock(ps, __func__);
+            return NC_PSPOLL_NOSESSIONS;
+        }
+
+        /* current time, needed for the session idle timeout checks */
+        nc_timeouttime_get(&ts_cur, 0);
+
         /* loop from i to j once (all sessions) */
         if (ps->last_event_session == ps->session_count - 1) {
             i = j = 0;
@@ -2931,7 +3059,7 @@ nc_ps_poll(struct nc_pollsession *ps, int timeout, struct nc_session **session)
                 ret = NC_PSPOLL_ERROR;
             } else if (r == 1) {
                 /* no one else is currently working with the session, so we can, otherwise skip it */
-                ret = nc_ps_poll_sess(cur_ps_session, ts_timeout.tv_sec);
+                ret = nc_ps_poll_sess(cur_ps_session, ts_cur.tv_sec);
 
                 /* keep RPC lock in this one case */
                 if (ret != NC_PSPOLL_RPC) {
@@ -2959,9 +3087,16 @@ nc_ps_poll(struct nc_pollsession *ps, int timeout, struct nc_session **session)
         if (ret == NC_PSPOLL_TIMEOUT) {
             usleep(NC_TIMEOUT_STEP);
 
-            if ((timeout > -1) && (nc_timeouttime_cur_diff(&ts_timeout) < 1)) {
+            if (ts_deadline && (nc_timeouttime_cur_diff(ts_deadline) < 1)) {
                 /* final timeout */
                 break;
+            }
+
+            /* PS CHECK PREEMPT
+             * let the threads waiting for the pollsession in */
+            r = nc_ps_check_preempt(ps, ts_deadline, __func__);
+            if (r != 1) {
+                return r ? NC_PSPOLL_ERROR : NC_PSPOLL_TIMEOUT;
             }
         }
     } while (ret == NC_PSPOLL_TIMEOUT);
@@ -2985,7 +3120,7 @@ nc_ps_poll(struct nc_pollsession *ps, int timeout, struct nc_session **session)
     }
 
     /* PS UNLOCK */
-    nc_ps_unlock(ps, q_id, __func__);
+    nc_ps_unlock(ps, __func__);
 
     /* we have some data available and the session is RPC locked (but not IO locked) */
     if (ret == NC_PSPOLL_RPC) {
@@ -3029,7 +3164,6 @@ nc_ps_poll(struct nc_pollsession *ps, int timeout, struct nc_session **session)
 API void
 nc_ps_clear(struct nc_pollsession *ps, int all, void (*data_free)(void *))
 {
-    uint8_t q_id;
     uint16_t i;
     struct nc_session *session;
 
@@ -3039,7 +3173,7 @@ nc_ps_clear(struct nc_pollsession *ps, int all, void (*data_free)(void *))
     }
 
     /* LOCK */
-    if (nc_ps_lock(ps, &q_id, __func__)) {
+    if (nc_ps_lock(ps, 1, NC_PS_TIMEOUT, __func__) != 1) {
         return;
     }
 
@@ -3066,7 +3200,7 @@ nc_ps_clear(struct nc_pollsession *ps, int all, void (*data_free)(void *))
     }
 
     /* UNLOCK */
-    nc_ps_unlock(ps, q_id, __func__);
+    nc_ps_unlock(ps, __func__);
 }
 
 /**
