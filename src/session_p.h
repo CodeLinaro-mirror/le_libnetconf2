@@ -1003,7 +1003,7 @@ struct nc_bind_desc {
     char *address;                  /**< Resolved address, the full socket path for a UNIX endpoint. */
     uint16_t port;                  /**< Port number, 0 for a UNIX socket. */
     int reused;                     /**< Whether an already registered socket is being reused. */
-    LY_ARRAY_COUNT_TYPE entry_idx;  /**< Index of the reused registry entry, valid only if @p reused. */
+    LYA_COUNT_T entry_idx;          /**< Index of the reused registry entry, valid only if @p reused. */
     char *rename;                   /**< New endpoint name to store into the reused registry entry,
                                          NULL if the endpoint was not renamed. */
     int sock;                       /**< Newly opened listening socket, -1 if none was opened. */

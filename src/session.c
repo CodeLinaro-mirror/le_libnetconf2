@@ -1329,7 +1329,7 @@ _nc_server_get_cpblts_version(const struct ly_ctx *ctx, LYS_VERSION version)
     char **cpblts;
     const struct lys_module *mod;
     uint32_t i, count, str_used = 0, str_size = 0;
-    LY_ARRAY_COUNT_TYPE v;
+    LYA_COUNT_T v;
     char *yl_content_id = NULL;
     uint32_t wd_also_supported, wd_basic_mode;
     char *str = NULL;
@@ -1492,7 +1492,7 @@ _nc_server_get_cpblts_version(const struct ly_ctx *ctx, LYS_VERSION version)
                 mod->revision ? "&revision=" : "", mod->revision ? mod->revision : ""), unlock_error);
 
         if (mod->compiled) {
-            LY_ARRAY_FOR(mod->compiled->features, v) {
+            LYA_FOR(mod->compiled->features, v) {
                 if (!v) {
                     NC_CHECK_GOTO(nc_str_append(&str, &str_used, &str_size, "&features="), unlock_error);
                 } else {
@@ -1502,7 +1502,7 @@ _nc_server_get_cpblts_version(const struct ly_ctx *ctx, LYS_VERSION version)
             }
         }
 
-        LY_ARRAY_FOR(mod->deviated_by, v) {
+        LYA_FOR(mod->deviated_by, v) {
             if (!v) {
                 NC_CHECK_GOTO(nc_str_append(&str, &str_used, &str_size, "&deviations="), unlock_error);
             } else {

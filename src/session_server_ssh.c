@@ -76,13 +76,13 @@ struct nc_auth_client *
 nc_ssh_find_auth_client(struct nc_server_ssh_opts *opts, const char *user, struct nc_session *session)
 {
     const struct nc_endpt *referenced_endpt;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     if (!user) {
         return NULL;
     }
 
-    for (u = 0; u < LY_ARRAY_COUNT(opts->auth_clients); u++) {
+    LYA_FOR(opts->auth_clients, u) {
         if (!strcmp(opts->auth_clients[u].username, user)) {
             return &opts->auth_clients[u];
         }
@@ -281,7 +281,7 @@ nc_server_ssh_auth_pubkey_check(struct nc_session *session, ssh_key pubkey,
         } else if (auth_client->pubkey_store == NC_STORE_LOCAL) {
             /* saved directly in the user's config */
             pubkeys = auth_client->pubkeys;
-            pubkey_count = LY_ARRAY_COUNT(auth_client->pubkeys);
+            pubkey_count = LYA_COUNT(auth_client->pubkeys);
         } else if (auth_client->pubkey_store == NC_STORE_TRUSTSTORE) {
             /* need to fetch from the truststore */
             ret = nc_server_ssh_ts_ref_get_keys(session->opts.server.config, auth_client->ts_ref,
@@ -667,7 +667,7 @@ static int
 nc_server_ssh_ks_ref_get_key(const struct nc_server_config *config, const char *referenced_name,
         struct nc_asymmetric_key **askey)
 {
-    LY_ARRAY_COUNT_TYPE i;
+    LYA_COUNT_T i;
     const struct nc_keystore *ks;
 
     if (!config) {
@@ -679,12 +679,12 @@ nc_server_ssh_ks_ref_get_key(const struct nc_server_config *config, const char *
     *askey = NULL;
 
     /* lookup name */
-    LY_ARRAY_FOR(ks->entries, i) {
+    LYA_FOR(ks->entries, i) {
         if (!strcmp(referenced_name, ks->entries[i].asym_key.name)) {
             break;
         }
     }
-    if (i == LY_ARRAY_COUNT(ks->entries)) {
+    if (i == LYA_COUNT(ks->entries)) {
         ERR(NULL, "Keystore entry \"%s\" not found.", referenced_name);
         return 1;
     }
@@ -705,7 +705,7 @@ int
 nc_server_ssh_ts_ref_get_keys(const struct nc_server_config *config, const char *referenced_name,
         struct nc_public_key **pubkeys, uint32_t *pubkey_count)
 {
-    LY_ARRAY_COUNT_TYPE i, u;
+    LYA_COUNT_T i, u;
     const struct nc_truststore *ts;
 
     *pubkeys = NULL;
@@ -718,18 +718,18 @@ nc_server_ssh_ts_ref_get_keys(const struct nc_server_config *config, const char 
     ts = &config->truststore;
 
     /* lookup name */
-    LY_ARRAY_FOR(ts->pubkey_bags, i) {
+    LYA_FOR(ts->pubkey_bags, i) {
         if (!strcmp(referenced_name, ts->pubkey_bags[i].name)) {
             break;
         }
     }
-    if (i == LY_ARRAY_COUNT(ts->pubkey_bags)) {
+    if (i == LYA_COUNT(ts->pubkey_bags)) {
         ERR(NULL, "Truststore entry \"%s\" not found.", referenced_name);
         return 1;
     }
 
     /* check if any of the referenced public keys is SubjectPublicKeyInfo */
-    LY_ARRAY_FOR(ts->pubkey_bags[i].pubkeys, u) {
+    LYA_FOR(ts->pubkey_bags[i].pubkeys, u) {
         if (nc_is_pk_subject_public_key_info(ts->pubkey_bags[i].pubkeys[u].data)) {
             ERR(NULL, "A public key of the referenced public key bag \"%s\" is in the SubjectPublicKeyInfo format, "
                     "which is not allowed in SSH!", referenced_name);
@@ -738,7 +738,7 @@ nc_server_ssh_ts_ref_get_keys(const struct nc_server_config *config, const char 
     }
 
     *pubkeys = ts->pubkey_bags[i].pubkeys;
-    *pubkey_count = LY_ARRAY_COUNT(ts->pubkey_bags[i].pubkeys);
+    *pubkey_count = LYA_COUNT(ts->pubkey_bags[i].pubkeys);
     return 0;
 }
 
@@ -1702,7 +1702,7 @@ nc_ssh_bind_add_hostkeys(const struct nc_server_config *config, ssh_bind sbind, 
     struct nc_hostkey *hostkey = NULL;
     struct nc_asymmetric_key *key = NULL;
 
-    LY_ARRAY_FOR(opts->hostkeys, struct nc_hostkey, hostkey) {
+    LYA_FOR_EACH(opts->hostkeys, hostkey) {
         privkey_path = NULL;
 
         /* get the asymmetric key */

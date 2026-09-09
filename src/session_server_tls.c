@@ -48,7 +48,7 @@ static int
 nc_server_tls_ks_ref_get_cert_key(const struct nc_server_config *config, const char *referenced_key_name,
         const char *referenced_cert_name, char **privkey_data, enum nc_privkey_format *privkey_type, char **cert_data)
 {
-    LY_ARRAY_COUNT_TYPE i, j;
+    LYA_COUNT_T i, j;
     const struct nc_keystore *ks;
 
     *privkey_data = NULL;
@@ -61,22 +61,22 @@ nc_server_tls_ks_ref_get_cert_key(const struct nc_server_config *config, const c
     ks = &config->keystore;
 
     /* lookup key */
-    LY_ARRAY_FOR(ks->entries, i) {
+    LYA_FOR(ks->entries, i) {
         if (!strcmp(referenced_key_name, ks->entries[i].asym_key.name)) {
             break;
         }
     }
-    if (i == LY_ARRAY_COUNT(ks->entries)) {
+    if (i == LYA_COUNT(ks->entries)) {
         ERR(NULL, "Keystore asymmetric key entry \"%s\" not found.", referenced_key_name);
         return -1;
     }
 
-    LY_ARRAY_FOR(ks->entries[i].certs, j) {
+    LYA_FOR(ks->entries[i].certs, j) {
         if (!strcmp(referenced_cert_name, ks->entries[i].certs[j].name)) {
             break;
         }
     }
-    if (j == LY_ARRAY_COUNT(ks->entries[i].certs)) {
+    if (j == LYA_COUNT(ks->entries[i].certs)) {
         ERR(NULL, "Keystore certificate entry \"%s\" associated with the key \"%s\" not found.",
                 referenced_cert_name, referenced_key_name);
         return -1;
@@ -101,7 +101,7 @@ static int
 nc_server_tls_truststore_ref_get_certs(const struct nc_server_config *config, const char *referenced_name,
         struct nc_certificate **certs, uint32_t *cert_count)
 {
-    LY_ARRAY_COUNT_TYPE i;
+    LYA_COUNT_T i;
     const struct nc_truststore *ts;
 
     *certs = NULL;
@@ -114,18 +114,18 @@ nc_server_tls_truststore_ref_get_certs(const struct nc_server_config *config, co
     ts = &config->truststore;
 
     /* lookup name */
-    LY_ARRAY_FOR(ts->cert_bags, i) {
+    LYA_FOR(ts->cert_bags, i) {
         if (!strcmp(referenced_name, ts->cert_bags[i].name)) {
             break;
         }
     }
-    if (i == LY_ARRAY_COUNT(ts->cert_bags)) {
+    if (i == LYA_COUNT(ts->cert_bags)) {
         ERR(NULL, "Truststore certificate bag \"%s\" not found.", referenced_name);
         return -1;
     }
 
     *certs = ts->cert_bags[i].certs;
-    *cert_count = LY_ARRAY_COUNT(ts->cert_bags[i].certs);
+    *cert_count = LYA_COUNT(ts->cert_bags[i].certs);
     return 0;
 }
 
@@ -571,7 +571,7 @@ _nc_server_tls_verify_peer_cert(const struct nc_server_config *config, void *pee
     if (client_auth->ee_certs_store == NC_STORE_LOCAL) {
         /* local definition */
         certs = client_auth->ee_certs;
-        cert_count = LY_ARRAY_COUNT(client_auth->ee_certs);
+        cert_count = LYA_COUNT(client_auth->ee_certs);
     } else if (client_auth->ee_certs_store == NC_STORE_TRUSTSTORE) {
         /* truststore reference */
         if (nc_server_tls_truststore_ref_get_certs(config, client_auth->ee_cert_bag_ts_ref, &certs, &cert_count)) {
@@ -789,7 +789,7 @@ nc_server_tls_load_trusted_certs(const struct nc_server_config *config,
     if (client_auth->ca_certs_store == NC_STORE_LOCAL) {
         /* local definition */
         certs = client_auth->ca_certs;
-        cert_count = LY_ARRAY_COUNT(client_auth->ca_certs);
+        cert_count = LYA_COUNT(client_auth->ca_certs);
     } else if (client_auth->ca_certs_store == NC_STORE_TRUSTSTORE) {
         /* truststore */
         if (nc_server_tls_truststore_ref_get_certs(config, client_auth->ca_cert_bag_ts_ref, &certs, &cert_count)) {
@@ -856,7 +856,7 @@ nc_server_tls_get_num_certs(const struct nc_server_config *config, struct nc_ser
     *cert_count = 0;
 
     if (client_auth->ca_certs_store == NC_STORE_LOCAL) {
-        ca_count = LY_ARRAY_COUNT(client_auth->ca_certs);
+        ca_count = LYA_COUNT(client_auth->ca_certs);
     } else if (client_auth->ca_certs_store == NC_STORE_TRUSTSTORE) {
         if (nc_server_tls_truststore_ref_get_certs(config, client_auth->ca_cert_bag_ts_ref, &certs, &ca_count)) {
             ERR(NULL, "Getting CA certificates from the truststore reference \"%s\" failed.", client_auth->ca_cert_bag_ts_ref);
@@ -865,7 +865,7 @@ nc_server_tls_get_num_certs(const struct nc_server_config *config, struct nc_ser
     }
 
     if (client_auth->ee_certs_store == NC_STORE_LOCAL) {
-        ee_count += LY_ARRAY_COUNT(client_auth->ee_certs);
+        ee_count += LYA_COUNT(client_auth->ee_certs);
     } else if (client_auth->ee_certs_store == NC_STORE_TRUSTSTORE) {
         if (nc_server_tls_truststore_ref_get_certs(config, client_auth->ee_cert_bag_ts_ref, &certs, &ee_count)) {
             ERR(NULL, "Getting end-entity certificates from the truststore reference \"%s\" failed.", client_auth->ee_cert_bag_ts_ref);

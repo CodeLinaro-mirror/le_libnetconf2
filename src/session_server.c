@@ -101,7 +101,7 @@ nc_server_ch_thread_arg_free(struct nc_server_ch_thread_arg *thread_arg)
 static int
 nc_server_ch_thread_reg_del(const char *client_name, struct nc_server_ch_thread_arg **thread_arg)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     *thread_arg = NULL;
 
@@ -110,7 +110,7 @@ nc_server_ch_thread_reg_del(const char *client_name, struct nc_server_ch_thread_
         return 1;
     }
 
-    LY_ARRAY_FOR(server_opts.ch_threads, u) {
+    LYA_FOR(server_opts.ch_threads, u) {
         if (strcmp(server_opts.ch_threads[u]->client_name, client_name)) {
             continue;
         }
@@ -118,8 +118,8 @@ nc_server_ch_thread_reg_del(const char *client_name, struct nc_server_ch_thread_
         *thread_arg = server_opts.ch_threads[u];
 
         /* swap the last entry into the hole, the order of the registry is irrelevant */
-        server_opts.ch_threads[u] = server_opts.ch_threads[LY_ARRAY_COUNT(server_opts.ch_threads) - 1];
-        LY_ARRAY_DECREMENT_FREE(server_opts.ch_threads);
+        server_opts.ch_threads[u] = server_opts.ch_threads[LYA_COUNT(server_opts.ch_threads) - 1];
+        LYA_DECREMENT_FREE(server_opts.ch_threads);
         break;
     }
 
@@ -146,7 +146,7 @@ nc_server_ch_thread_reg_del(const char *client_name, struct nc_server_ch_thread_
 static void
 nc_server_ch_thread_unreg_self(struct nc_server_ch_thread_arg *thread_arg)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
     int found = 0;
 
     /* CH THREADS LOCK */
@@ -154,7 +154,7 @@ nc_server_ch_thread_unreg_self(struct nc_server_ch_thread_arg *thread_arg)
         return;
     }
 
-    LY_ARRAY_FOR(server_opts.ch_threads, u) {
+    LYA_FOR(server_opts.ch_threads, u) {
         if (server_opts.ch_threads[u] != thread_arg) {
             continue;
         }
@@ -162,8 +162,8 @@ nc_server_ch_thread_unreg_self(struct nc_server_ch_thread_arg *thread_arg)
         found = 1;
 
         /* swap the last entry into the hole, the order of the registry is irrelevant */
-        server_opts.ch_threads[u] = server_opts.ch_threads[LY_ARRAY_COUNT(server_opts.ch_threads) - 1];
-        LY_ARRAY_DECREMENT_FREE(server_opts.ch_threads);
+        server_opts.ch_threads[u] = server_opts.ch_threads[LYA_COUNT(server_opts.ch_threads) - 1];
+        LYA_DECREMENT_FREE(server_opts.ch_threads);
         break;
     }
 
@@ -183,19 +183,19 @@ nc_server_ch_thread_unreg_self(struct nc_server_ch_thread_arg *thread_arg)
 void
 nc_server_ch_thread_names_free(char **names)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
-    LY_ARRAY_FOR(names, u) {
+    LYA_FOR(names, u) {
         free(names[u]);
     }
-    LY_ARRAY_FREE(names);
+    LYA_FREE(names);
 }
 
 int
 nc_server_ch_thread_names_get(char ***names)
 {
     int rc = 0;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
     char *name;
 
     *names = NULL;
@@ -205,13 +205,13 @@ nc_server_ch_thread_names_get(char ***names)
         return 1;
     }
 
-    if (LY_ARRAY_COUNT(server_opts.ch_threads)) {
-        LY_ARRAY_CREATE_GOTO(NULL, *names, LY_ARRAY_COUNT(server_opts.ch_threads), rc, cleanup);
-        LY_ARRAY_FOR(server_opts.ch_threads, u) {
+    if (LYA_COUNT(server_opts.ch_threads)) {
+        LYA_PREALLOC(*names, LYA_COUNT(server_opts.ch_threads), ERRMEM; rc = 1; goto cleanup);
+        LYA_FOR(server_opts.ch_threads, u) {
             name = strdup(server_opts.ch_threads[u]->client_name);
             NC_CHECK_ERRMEM_GOTO(!name, rc = 1, cleanup);
             (*names)[u] = name;
-            LY_ARRAY_INCREMENT(*names);
+            LYA_INCREMENT(*names);
         }
     }
 
@@ -235,11 +235,11 @@ cleanup:
 static const struct nc_ch_client *
 nc_server_ch_client_get_pinned(const struct nc_server_config *config, const char *name)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     assert(name);
 
-    LY_ARRAY_FOR(config->ch_clients, u) {
+    LYA_FOR(config->ch_clients, u) {
         if (!strcmp(config->ch_clients[u].name, name)) {
             return &config->ch_clients[u];
         }
@@ -253,7 +253,7 @@ nc_server_ch_client_get_pinned(const struct nc_server_config *config, const char
 int
 nc_server_endpt_get(const struct nc_server_config *config, const char *name, const struct nc_endpt **endpt)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     *endpt = NULL;
 
@@ -261,7 +261,7 @@ nc_server_endpt_get(const struct nc_server_config *config, const char *name, con
         return 1;
     }
 
-    LY_ARRAY_FOR(config->endpts, u) {
+    LYA_FOR(config->endpts, u) {
         if (config->endpts[u].name && !strcmp(config->endpts[u].name, name)) {
             *endpt = &config->endpts[u];
             return 0;
@@ -687,7 +687,7 @@ static char *
 nc_server_unix_get_socket_path(const struct nc_endpt *endpt)
 {
     int rc = 0;
-    LY_ARRAY_COUNT_TYPE i;
+    LYA_COUNT_T i;
     const char *p = NULL;
     char *path = NULL, *sock_dir = NULL;
 
@@ -708,7 +708,7 @@ nc_server_unix_get_socket_path(const struct nc_endpt *endpt)
         break;
     case NC_UNIX_SOCKET_PATH_HIDDEN:
         /* search the mappings, they store the full path so there is nothing to construct */
-        LY_ARRAY_FOR(server_opts.unix_paths, i) {
+        LYA_FOR(server_opts.unix_paths, i) {
             if (!strcmp(server_opts.unix_paths[i].endpt_name, endpt->name)) {
                 p = server_opts.unix_paths[i].path;
                 break;
@@ -1152,15 +1152,15 @@ cleanup:
  */
 static int
 nc_server_accept_binds(const struct nc_server_config *config, int timeout, char **host,
-        uint16_t *port, LY_ARRAY_COUNT_TYPE *idx, int *sock)
+        uint16_t *port, LYA_COUNT_T *idx, int *sock)
 {
     struct pollfd *pollfds = NULL;
     uint16_t pollfd_count = 0, fd_idx = 0, i, bind_count = 0;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
     int ret = 1, binds_locked = 0;
     char **addr_map = NULL;
     uint16_t *port_map = NULL;
-    LY_ARRAY_COUNT_TYPE *endpt_map = NULL;
+    LYA_COUNT_T *endpt_map = NULL;
 
     /* BINDS LOCK */
     if (nc_mutex_lock(&server_opts.binds_lock, NC_BINDS_LOCK_TIMEOUT, __func__) != 1) {
@@ -1168,7 +1168,7 @@ nc_server_accept_binds(const struct nc_server_config *config, int timeout, char 
     }
     binds_locked = 1;
 
-    bind_count = LY_ARRAY_COUNT(server_opts.binds);
+    bind_count = LYA_COUNT(server_opts.binds);
     if (!bind_count) {
         /* no binds to accept on, treat as a timeout */
         ret = 0;
@@ -1188,12 +1188,12 @@ nc_server_accept_binds(const struct nc_server_config *config, int timeout, char 
     for (i = 0; i < bind_count; ++i) {
         /* resolve the endpoint of the bind in the pinned configuration, it is immutable so the
          * index stays valid for as long as the configuration is pinned */
-        LY_ARRAY_FOR(config->endpts, u) {
+        LYA_FOR(config->endpts, u) {
             if (!strcmp(config->endpts[u].name, server_opts.binds[i].endpt_name)) {
                 break;
             }
         }
-        if (u == LY_ARRAY_COUNT(config->endpts)) {
+        if (u == LYA_COUNT(config->endpts)) {
             /* we would have no endpoint to serve a connection accepted here with, do not poll it */
             continue;
         }
@@ -1665,11 +1665,11 @@ nc_server_destroy(void)
 #endif /* NC_ENABLED_SSH_TLS */
 
     /* hidden UNIX socket paths */
-    LY_ARRAY_FOR(server_opts.unix_paths, i) {
+    LYA_FOR(server_opts.unix_paths, i) {
         free(server_opts.unix_paths[i].endpt_name);
         free(server_opts.unix_paths[i].path);
     }
-    LY_ARRAY_FREE(server_opts.unix_paths);
+    LYA_FREE(server_opts.unix_paths);
     server_opts.unix_paths = NULL;
     free(server_opts.unix_socket_dir);
     server_opts.unix_socket_dir = NULL;
@@ -3184,26 +3184,26 @@ nc_server_bind_descs_get(const struct nc_server_config *config, struct nc_bind_d
     const struct nc_endpt *endpt;
     const struct nc_bind *bind;
     struct nc_bind_desc *desc;
-    LY_ARRAY_COUNT_TYPE u, v;
+    LYA_COUNT_T u, v;
     uint32_t count = 0;
 
     *descs = NULL;
 
-    LY_ARRAY_FOR(config->endpts, u) {
-        count += LY_ARRAY_COUNT(config->endpts[u].binds);
+    LYA_FOR(config->endpts, u) {
+        count += LYA_COUNT(config->endpts[u].binds);
     }
     if (!count) {
         return 0;
     }
-    LY_ARRAY_CREATE_GOTO(NULL, *descs, count, rc, cleanup);
+    LYA_PREALLOC(*descs, count, ERRMEM; rc = 1; goto cleanup);
 
-    LY_ARRAY_FOR(config->endpts, u) {
+    LYA_FOR(config->endpts, u) {
         endpt = &config->endpts[u];
 
-        LY_ARRAY_FOR(endpt->binds, v) {
+        LYA_FOR(endpt->binds, v) {
             bind = &endpt->binds[v];
 
-            desc = &(*descs)[LY_ARRAY_COUNT(*descs)];
+            desc = &(*descs)[LYA_COUNT(*descs)];
             desc->endpt = endpt;
             desc->port = bind->port;
             desc->sock = -1;
@@ -3218,7 +3218,7 @@ nc_server_bind_descs_get(const struct nc_server_config *config, struct nc_bind_d
                 NC_CHECK_ERRMEM_GOTO(!desc->address, rc = 1, cleanup);
             }
 
-            LY_ARRAY_INCREMENT(*descs);
+            LYA_INCREMENT(*descs);
         }
     }
 
@@ -3234,14 +3234,14 @@ cleanup:
 static void
 nc_server_bind_descs_free(struct nc_bind_desc *descs)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
-    LY_ARRAY_FOR(descs, u) {
+    LYA_FOR(descs, u) {
         nc_server_bind_desc_close(&descs[u]);
         free(descs[u].address);
         free(descs[u].rename);
     }
-    LY_ARRAY_FREE(descs);
+    LYA_FREE(descs);
 }
 
 int
@@ -3251,7 +3251,7 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
     struct nc_bind_desc *descs = NULL;
     struct nc_bind_entry *entry;
     char *endpt_name, *address;
-    LY_ARRAY_COUNT_TYPE u, v, added = 0;
+    LYA_COUNT_T u, v, added = 0;
     uint32_t new_count = 0;
 
     /* collect all the listening sockets the configuration requires, no lock is needed for that */
@@ -3265,8 +3265,8 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
     binds_locked = 1;
 
     /* keep listening on the sockets that are already registered */
-    LY_ARRAY_FOR(descs, u) {
-        LY_ARRAY_FOR(server_opts.binds, v) {
+    LYA_FOR(descs, u) {
+        LYA_FOR(server_opts.binds, v) {
             if (!nc_server_bind_entry_matches(&server_opts.binds[v], &descs[u])) {
                 continue;
             }
@@ -3293,7 +3293,7 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
     binds_locked = 0;
 
     /* start listening on the sockets that are not registered yet */
-    LY_ARRAY_FOR(descs, u) {
+    LYA_FOR(descs, u) {
         if (descs[u].reused) {
             continue;
         }
@@ -3311,9 +3311,9 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
 
     /* register the new sockets, reserve the space in advance */
     if (new_count) {
-        LY_ARRAY_CREATE_GOTO(NULL, server_opts.binds, new_count, rc, cleanup);
+        LYA_PREALLOC(server_opts.binds, new_count, ERRMEM; rc = 1; goto cleanup);
     }
-    LY_ARRAY_FOR(descs, u) {
+    LYA_FOR(descs, u) {
         if (descs[u].reused) {
             continue;
         }
@@ -3323,7 +3323,7 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
         address = strdup(descs[u].address);
         NC_CHECK_ERRMEM_GOTO(!address, free(endpt_name); rc = 1, cleanup);
 
-        entry = &server_opts.binds[LY_ARRAY_COUNT(server_opts.binds)];
+        entry = &server_opts.binds[LYA_COUNT(server_opts.binds)];
         entry->endpt_name = endpt_name;
         entry->address = address;
         entry->port = descs[u].port;
@@ -3332,12 +3332,12 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
 
         /* the socket now belongs to the registry */
         descs[u].sock = -1;
-        LY_ARRAY_INCREMENT(server_opts.binds);
+        LYA_INCREMENT(server_opts.binds);
         ++added;
     }
 
     /* the registry entries did not move, so store the new endpoint names now that nothing can fail */
-    LY_ARRAY_FOR(descs, u) {
+    LYA_FOR(descs, u) {
         if (!descs[u].rename) {
             continue;
         }
@@ -3350,9 +3350,9 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
 
     /* stop listening on the sockets the configuration no longer contains */
     v = 0;
-    while (v < LY_ARRAY_COUNT(server_opts.binds)) {
+    while (v < LYA_COUNT(server_opts.binds)) {
         found = 0;
-        LY_ARRAY_FOR(descs, u) {
+        LYA_FOR(descs, u) {
             if (nc_server_bind_entry_matches(&server_opts.binds[v], &descs[u])) {
                 found = 1;
                 break;
@@ -3366,17 +3366,17 @@ nc_server_binds_reconcile(const struct nc_server_config *config)
         nc_server_bind_entry_close(&server_opts.binds[v]);
 
         /* swap the last entry into the hole, the order of the registry is irrelevant */
-        server_opts.binds[v] = server_opts.binds[LY_ARRAY_COUNT(server_opts.binds) - 1];
-        LY_ARRAY_DECREMENT_FREE(server_opts.binds);
+        server_opts.binds[v] = server_opts.binds[LYA_COUNT(server_opts.binds) - 1];
+        LYA_DECREMENT_FREE(server_opts.binds);
     }
 
 cleanup:
     if (rc) {
         /* unregister the sockets we have just registered, they are always the last ones */
         while (added) {
-            entry = &server_opts.binds[LY_ARRAY_COUNT(server_opts.binds) - 1];
+            entry = &server_opts.binds[LYA_COUNT(server_opts.binds) - 1];
             nc_server_bind_entry_close(entry);
-            LY_ARRAY_DECREMENT_FREE(server_opts.binds);
+            LYA_DECREMENT_FREE(server_opts.binds);
             --added;
         }
     }
@@ -3391,17 +3391,17 @@ cleanup:
 void
 nc_server_binds_destroy(void)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     /* BINDS LOCK */
     if (nc_mutex_lock(&server_opts.binds_lock, NC_BINDS_LOCK_TIMEOUT, __func__) != 1) {
         return;
     }
 
-    LY_ARRAY_FOR(server_opts.binds, u) {
+    LYA_FOR(server_opts.binds, u) {
         nc_server_bind_entry_close(&server_opts.binds[u]);
     }
-    LY_ARRAY_FREE(server_opts.binds);
+    LYA_FREE(server_opts.binds);
     server_opts.binds = NULL;
 
     /* BINDS UNLOCK */
@@ -3487,15 +3487,15 @@ nc_accept_unix_auth_username(struct nc_session *session, const char *effective_u
 {
     int match = 0;
     struct nc_server_unix_opts *opts = session->data;
-    LY_ARRAY_COUNT_TYPE i, j;
+    LYA_COUNT_T i, j;
 
     /* try to find a mapping entry for this system user */
-    LY_ARRAY_FOR(opts->user_mappings, i) {
+    LYA_FOR(opts->user_mappings, i) {
         if (!strcmp(opts->user_mappings[i].system_user, effective_uname)) {
             break;
         }
     }
-    if (i == LY_ARRAY_COUNT(opts->user_mappings)) {
+    if (i == LYA_COUNT(opts->user_mappings)) {
         /* matching entry not found, the user can only authenticate if its
          * requested username is the same as the effective one */
         if (strcmp(effective_uname, requested_uname)) {
@@ -3504,7 +3504,7 @@ nc_accept_unix_auth_username(struct nc_session *session, const char *effective_u
         }
     } else {
         /* found a mapping entry, check if the requested username is allowed for this system user */
-        LY_ARRAY_FOR(opts->user_mappings[i].allowed_users, j) {
+        LYA_FOR(opts->user_mappings[i].allowed_users, j) {
             if (!strcmp(opts->user_mappings[i].allowed_users[j], "*")) {
                 /* special case, the user can authenticate as any username */
                 match = 1;
@@ -3601,7 +3601,7 @@ nc_server_endpt_count(void)
         return 0;
     }
 
-    cnt = LY_ARRAY_COUNT(config->endpts);
+    cnt = LYA_COUNT(config->endpts);
 
     nc_server_config_release(config);
     return cnt;
@@ -3615,7 +3615,7 @@ nc_accept(int timeout, const struct ly_ctx *ctx, struct nc_session **session)
     char *host = NULL;
     uint16_t port = 0;
     struct timespec ts_cur;
-    LY_ARRAY_COUNT_TYPE endpt_idx;
+    LYA_COUNT_T endpt_idx;
     const struct nc_server_config *config;
 
     NC_CHECK_ARG_RET(NULL, ctx, session, NC_MSG_ERROR);
@@ -3809,7 +3809,7 @@ nc_server_ch_client_is_endpt(const char *client_name, const char *endpt_name)
 {
     const struct nc_server_config *config;
     const struct nc_ch_client *client;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
     int found = 0;
 
     if (!client_name || !endpt_name) {
@@ -3826,7 +3826,7 @@ nc_server_ch_client_is_endpt(const char *client_name, const char *endpt_name)
         goto cleanup;
     }
 
-    LY_ARRAY_FOR(client->ch_endpts, u) {
+    LYA_FOR(client->ch_endpts, u) {
         if (!strcmp(client->ch_endpts[u].name, endpt_name)) {
             found = 1;
             goto cleanup;
@@ -4358,18 +4358,18 @@ nc_ch_client_thread(void *arg)
                 next_endpt_index = 0;
             } else if (start_with == NC_CH_LAST_CONNECTED) {
                 /* we keep the current one but due to the release/acquire we have to find it again */
-                LY_ARRAY_FOR(client->ch_endpts, next_endpt_index) {
+                LYA_FOR(client->ch_endpts, next_endpt_index) {
                     if (!strcmp(client->ch_endpts[next_endpt_index].name, cur_endpt_name)) {
                         break;
                     }
                 }
-                if (next_endpt_index >= LY_ARRAY_COUNT(client->ch_endpts)) {
+                if (next_endpt_index >= LYA_COUNT(client->ch_endpts)) {
                     /* endpoint was removed, start with the first one */
                     next_endpt_index = 0;
                 }
             } else {
                 /* just get a random index */
-                next_endpt_index = rand() % LY_ARRAY_COUNT(client->ch_endpts);
+                next_endpt_index = rand() % LYA_COUNT(client->ch_endpts);
             }
             cur_attempts = 0;
         } else {
@@ -4420,13 +4420,13 @@ nc_ch_client_thread(void *arg)
             }
 
             /* try to find our endpoint again */
-            LY_ARRAY_FOR(client->ch_endpts, next_endpt_index) {
+            LYA_FOR(client->ch_endpts, next_endpt_index) {
                 if (!strcmp(client->ch_endpts[next_endpt_index].name, cur_endpt_name)) {
                     break;
                 }
             }
 
-            if (next_endpt_index >= LY_ARRAY_COUNT(client->ch_endpts)) {
+            if (next_endpt_index >= LYA_COUNT(client->ch_endpts)) {
                 /* endpoint was removed, start with the first one */
                 VRB(NULL, "Call Home client \"%s\" endpoint \"%s\" removed.", data->client_name, cur_endpt_name);
 
@@ -4449,7 +4449,7 @@ nc_ch_client_thread(void *arg)
                     cur_sock_pending = -1;
                 }
 
-                if (next_endpt_index < LY_ARRAY_COUNT(client->ch_endpts) - 1) {
+                if (next_endpt_index < LYA_COUNT(client->ch_endpts) - 1) {
                     /* just go to the next endpoint */
                     ++next_endpt_index;
                 } else {
@@ -4528,13 +4528,13 @@ nc_server_ch_threads_destroy(void)
 {
     int rc = 0;
     char **names = NULL;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     if (nc_server_ch_thread_names_get(&names)) {
         return 1;
     }
 
-    LY_ARRAY_FOR(names, u) {
+    LYA_FOR(names, u) {
         if (nc_session_server_ch_client_dispatch_stop(names[u])) {
             rc = 1;
         }
@@ -4545,11 +4545,11 @@ nc_server_ch_threads_destroy(void)
     if (nc_mutex_lock(&server_opts.ch_threads_lock, NC_CH_THREADS_LOCK_TIMEOUT, __func__) != 1) {
         return 1;
     }
-    if (LY_ARRAY_COUNT(server_opts.ch_threads)) {
+    if (LYA_COUNT(server_opts.ch_threads)) {
         ERRINT;
         rc = 1;
     }
-    LY_ARRAY_FREE(server_opts.ch_threads);
+    LYA_FREE(server_opts.ch_threads);
     server_opts.ch_threads = NULL;
     /* CH THREADS UNLOCK */
     nc_mutex_unlock(&server_opts.ch_threads_lock, __func__);
@@ -4564,9 +4564,8 @@ _nc_connect_ch_client_dispatch(const char *client_name, nc_server_ch_session_acq
 {
     int rc = 0, r;
     int flags;
-    LY_ERR lyrc = LY_SUCCESS;
     struct nc_server_ch_thread_arg *arg = NULL, **item;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     /* create the thread argument */
     arg = calloc(1, sizeof *arg);
@@ -4588,6 +4587,7 @@ _nc_connect_ch_client_dispatch(const char *client_name, nc_server_ch_session_acq
     }
     arg->new_session_fail_cb = server_opts.ch_dispatch_data.new_session_fail_cb;
     arg->new_session_fail_cb_data = server_opts.ch_dispatch_data.new_session_fail_cb_data;
+
     /* OPTS READ UNLOCK */
     nc_rwlock_unlock(&server_opts.opts_lock, __func__);
 
@@ -4620,7 +4620,7 @@ _nc_connect_ch_client_dispatch(const char *client_name, nc_server_ch_session_acq
     }
 
     /* there must never be two threads dispatched for a single Call Home client */
-    LY_ARRAY_FOR(server_opts.ch_threads, u) {
+    LYA_FOR(server_opts.ch_threads, u) {
         if (!strcmp(server_opts.ch_threads[u]->client_name, client_name)) {
             rc = 1;
             goto unlock;
@@ -4628,13 +4628,13 @@ _nc_connect_ch_client_dispatch(const char *client_name, nc_server_ch_session_acq
     }
 
     /* register the thread first, the array cannot fail to grow once the thread is running */
-    LY_ARRAY_NEW_GOTO(NULL, server_opts.ch_threads, item, lyrc, unlock);
+    LYA_ADD_ITEM(server_opts.ch_threads, item, ERRMEM; rc = -1; goto unlock);
     *item = arg;
 
     /* create the CH thread */
     if ((r = pthread_create(&arg->tid, NULL, nc_ch_client_thread, arg))) {
         ERR(NULL, "Creating a new thread failed (%s).", strerror(r));
-        LY_ARRAY_DECREMENT_FREE(server_opts.ch_threads);
+        LYA_DECREMENT_FREE(server_opts.ch_threads);
         rc = -1;
         goto unlock;
     }
@@ -4645,9 +4645,6 @@ _nc_connect_ch_client_dispatch(const char *client_name, nc_server_ch_session_acq
 unlock:
     /* CH THREADS UNLOCK */
     nc_mutex_unlock(&server_opts.ch_threads_lock, __func__);
-    if (lyrc) {
-        rc = -1;
-    }
 
 cleanup:
     nc_server_ch_thread_arg_free(arg);
@@ -4701,9 +4698,9 @@ cleanup:
 static int
 nc_server_ch_name_found(char **names, const char *name)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
-    LY_ARRAY_FOR(names, u) {
+    LYA_FOR(names, u) {
         if (!strcmp(names[u], name)) {
             return 1;
         }
@@ -4722,9 +4719,9 @@ nc_server_ch_name_found(char **names, const char *name)
 static int
 nc_server_ch_client_configured(const struct nc_server_config *config, const char *name)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
-    LY_ARRAY_FOR(config->ch_clients, u) {
+    LYA_FOR(config->ch_clients, u) {
         if (!strcmp(config->ch_clients[u].name, name)) {
             return 1;
         }
@@ -4743,9 +4740,9 @@ nc_server_ch_client_configured(const struct nc_server_config *config, const char
 static int
 nc_server_ch_new_clients_created(const struct nc_server_config *config, char **running)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
-    LY_ARRAY_FOR(config->ch_clients, u) {
+    LYA_FOR(config->ch_clients, u) {
         if (!nc_server_ch_name_found(running, config->ch_clients[u].name)) {
             return 1;
         }
@@ -4759,7 +4756,7 @@ int
 nc_server_ch_clients_reconcile(const struct nc_server_config *config)
 {
     int rc = 0;
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
     char **running = NULL, **started = NULL, **started_name, *name = NULL;
     struct nc_server_ch_dispatch_data dispatch_data;
     int dispatch_new_clients = 1;
@@ -4791,7 +4788,7 @@ nc_server_ch_clients_reconcile(const struct nc_server_config *config)
      */
     if (dispatch_new_clients) {
         /* only dispatch if all required CBs are set */
-        LY_ARRAY_FOR(config->ch_clients, u) {
+        LYA_FOR(config->ch_clients, u) {
             if (nc_server_ch_name_found(running, config->ch_clients[u].name)) {
                 /* already running */
                 continue;
@@ -4817,7 +4814,7 @@ nc_server_ch_clients_reconcile(const struct nc_server_config *config)
              * ready before the array grows so that the rollback never sees a NULL entry */
             name = strdup(config->ch_clients[u].name);
             NC_CHECK_ERRMEM_GOTO(!name, rc = 1, rollback);
-            LY_ARRAY_NEW_GOTO(NULL, started, started_name, rc, rollback);
+            LYA_ADD_ITEM(started, started_name, ERRMEM; rc = 1; goto rollback);
             *started_name = name;
             name = NULL;
         }
@@ -4828,7 +4825,7 @@ nc_server_ch_clients_reconcile(const struct nc_server_config *config)
      * All new clients started successfully. Now stop the running clients
      * that are not present in the new configuration.
      */
-    LY_ARRAY_FOR(running, u) {
+    LYA_FOR(running, u) {
         if (nc_server_ch_client_configured(config, running[u])) {
             continue;
         }
@@ -4850,7 +4847,7 @@ rollback:
      * An error occurred during PHASE 1. Stop any new threads we *just* started
      * to return to the pre-call state.
      */
-    LY_ARRAY_FOR(started, u) {
+    LYA_FOR(started, u) {
         nc_session_server_ch_client_dispatch_stop(started[u]);
     }
     /* rc is already set to non-zero from the failure point */
@@ -5274,7 +5271,7 @@ nc_server_notif_cert_exp_dates_endpt_get(const char *ch_client_name, const char 
         struct nc_cert_expiration **exp_dates, uint32_t *exp_date_count)
 {
     int ret = 0;
-    LY_ARRAY_COUNT_TYPE i;
+    LYA_COUNT_T i;
     struct nc_certificate *certs;
     struct nc_cert_path_aux cp = {0};
 
@@ -5291,7 +5288,7 @@ nc_server_notif_cert_exp_dates_endpt_get(const char *ch_client_name, const char 
     if (opts->client_auth.ca_certs_store == NC_STORE_LOCAL) {
         certs = opts->client_auth.ca_certs;
 
-        LY_ARRAY_FOR(certs, i) {
+        LYA_FOR(certs, i) {
             NC_CERT_EXP_UPDATE_CERT_PATH(&cp, ch_client_name, endpt_name, certs[i].name, NULL, NULL, NULL, NULL, NULL);
             ret = nc_server_notif_cert_exp_date_append(certs[i].data, &cp, intervals, interval_count, exp_dates, exp_date_count);
             if (ret) {
@@ -5304,7 +5301,7 @@ nc_server_notif_cert_exp_dates_endpt_get(const char *ch_client_name, const char 
     if (opts->client_auth.ee_certs_store == NC_STORE_LOCAL) {
         certs = opts->client_auth.ee_certs;
 
-        LY_ARRAY_FOR(certs, i) {
+        LYA_FOR(certs, i) {
             NC_CERT_EXP_UPDATE_CERT_PATH(&cp, ch_client_name, endpt_name, NULL, certs[i].name, NULL, NULL, NULL, NULL);
             ret = nc_server_notif_cert_exp_date_append(certs[i].data, &cp, intervals, interval_count, exp_dates, exp_date_count);
             if (ret) {
@@ -5339,7 +5336,7 @@ nc_server_notif_cert_exp_dates_get(struct nc_cert_exp_time_interval *intervals, 
     const struct nc_keystore *ks;
     const struct nc_truststore *ts;
     struct nc_cert_path_aux cp = {0};
-    LY_ARRAY_COUNT_TYPE i, u, v;
+    LYA_COUNT_T i, u, v;
 
     NC_CHECK_ARG_RET(NULL, intervals, interval_count, exp_dates, exp_date_count, 1);
 
@@ -5356,7 +5353,7 @@ nc_server_notif_cert_exp_dates_get(struct nc_cert_exp_time_interval *intervals, 
     ts = &config->truststore;
 
     /* first go through listen certs */
-    LY_ARRAY_FOR(config->endpts, u) {
+    LYA_FOR(config->endpts, u) {
         endpt = &config->endpts[u];
         if (endpt->ti == NC_TI_TLS) {
             ret = nc_server_notif_cert_exp_dates_endpt_get(NULL, endpt->name, endpt->opts.tls,
@@ -5368,9 +5365,9 @@ nc_server_notif_cert_exp_dates_get(struct nc_cert_exp_time_interval *intervals, 
     }
 
     /* then go through all the ch clients and their endpts */
-    LY_ARRAY_FOR(config->ch_clients, u) {
+    LYA_FOR(config->ch_clients, u) {
         ch_client = &config->ch_clients[u];
-        LY_ARRAY_FOR(ch_client->ch_endpts, v) {
+        LYA_FOR(ch_client->ch_endpts, v) {
             ch_endpt = &ch_client->ch_endpts[v];
             if (ch_endpt->ti == NC_TI_TLS) {
                 ret = nc_server_notif_cert_exp_dates_endpt_get(ch_client->name, ch_endpt->name, ch_endpt->opts.tls,
@@ -5383,8 +5380,8 @@ nc_server_notif_cert_exp_dates_get(struct nc_cert_exp_time_interval *intervals, 
     }
 
     /* keystore certs */
-    LY_ARRAY_FOR(ks->entries, i) {
-        LY_ARRAY_FOR(ks->entries[i].certs, struct nc_certificate, cert) {
+    LYA_FOR(ks->entries, i) {
+        LYA_FOR_EACH(ks->entries[i].certs, cert) {
             NC_CERT_EXP_UPDATE_CERT_PATH(&cp, NULL, NULL, NULL, NULL, ks->entries[i].asym_key.name, cert->name, NULL, NULL);
             ret = nc_server_notif_cert_exp_date_append(cert->data, &cp, intervals, interval_count, exp_dates, exp_date_count);
             if (ret) {
@@ -5394,8 +5391,8 @@ nc_server_notif_cert_exp_dates_get(struct nc_cert_exp_time_interval *intervals, 
     }
 
     /* truststore certs */
-    LY_ARRAY_FOR(ts->cert_bags, i) {
-        LY_ARRAY_FOR(ts->cert_bags[i].certs, struct nc_certificate, cert) {
+    LYA_FOR(ts->cert_bags, i) {
+        LYA_FOR_EACH(ts->cert_bags[i].certs, cert) {
             NC_CERT_EXP_UPDATE_CERT_PATH(&cp, NULL, NULL, NULL, NULL, NULL, NULL, ts->cert_bags[i].name, cert->name);
             ret = nc_server_notif_cert_exp_date_append(cert->data, &cp, intervals, interval_count, exp_dates, exp_date_count);
             if (ret) {
@@ -5534,11 +5531,11 @@ nc_server_notif_cert_exp_intervals_get(struct nc_cert_exp_time_interval *default
         *interval_count = default_interval_count;
     } else {
         /* dup the configured intervals */
-        *intervals = malloc(LY_ARRAY_COUNT(config->cert_exp_notif_intervals) * sizeof **intervals);
+        *intervals = malloc(LYA_COUNT(config->cert_exp_notif_intervals) * sizeof **intervals);
         NC_CHECK_ERRMEM_GOTO(!*intervals, rc = 1, cleanup);
         memcpy(*intervals, config->cert_exp_notif_intervals,
-                LY_ARRAY_COUNT(config->cert_exp_notif_intervals) * sizeof **intervals);
-        *interval_count = LY_ARRAY_COUNT(config->cert_exp_notif_intervals);
+                LYA_COUNT(config->cert_exp_notif_intervals) * sizeof **intervals);
+        *interval_count = LYA_COUNT(config->cert_exp_notif_intervals);
     }
 
 cleanup:
@@ -5742,13 +5739,13 @@ nc_server_notif_cert_expiration_thread_stop(int wait)
 int
 nc_server_is_mod_ignored(const struct nc_server_config *config, const char *mod_name)
 {
-    LY_ARRAY_COUNT_TYPE u;
+    LYA_COUNT_T u;
 
     if (!config) {
         return 0;
     }
 
-    LY_ARRAY_FOR(config->ignored_modules, u) {
+    LYA_FOR(config->ignored_modules, u) {
         if (!strcmp(config->ignored_modules[u], mod_name)) {
             return 1;
         }
@@ -5761,7 +5758,7 @@ API int
 nc_server_set_unix_socket_path(const char *endpoint_name, const char *socket_path)
 {
     int rc = 0;
-    LY_ARRAY_COUNT_TYPE i;
+    LYA_COUNT_T i;
     struct nc_server_unix_path_entry *pentry = NULL;
 
     NC_CHECK_ARG_RET(NULL, endpoint_name, socket_path, 1);
@@ -5772,7 +5769,7 @@ nc_server_set_unix_socket_path(const char *endpoint_name, const char *socket_pat
     }
 
     /* try to see if the path for this endpoint already exists */
-    LY_ARRAY_FOR(server_opts.unix_paths, i) {
+    LYA_FOR(server_opts.unix_paths, i) {
         if (!strcmp(server_opts.unix_paths[i].endpt_name, endpoint_name)) {
             pentry = &server_opts.unix_paths[i];
             break;
@@ -5780,7 +5777,7 @@ nc_server_set_unix_socket_path(const char *endpoint_name, const char *socket_pat
     }
     if (!pentry) {
         /* create a new entry */
-        LY_ARRAY_NEW_GOTO(NULL, server_opts.unix_paths, pentry, rc, cleanup);
+        LYA_ADD_ITEM(server_opts.unix_paths, pentry, ERRMEM; rc = 1; goto cleanup);
         pentry->endpt_name = strdup(endpoint_name);
         NC_CHECK_ERRMEM_GOTO(!pentry->endpt_name, rc = 1, cleanup);
     } else {
@@ -5802,7 +5799,7 @@ nc_server_get_unix_socket_path(const char *endpoint_name, char **socket_path)
 {
     int rc = 0;
     char *p = NULL;
-    LY_ARRAY_COUNT_TYPE i;
+    LYA_COUNT_T i;
 
     NC_CHECK_ARG_RET(NULL, endpoint_name, socket_path, 1);
 
@@ -5814,7 +5811,7 @@ nc_server_get_unix_socket_path(const char *endpoint_name, char **socket_path)
     }
 
     /* try to find the path for this endpoint */
-    LY_ARRAY_FOR(server_opts.unix_paths, i) {
+    LYA_FOR(server_opts.unix_paths, i) {
         if (!strcmp(server_opts.unix_paths[i].endpt_name, endpoint_name)) {
             p = server_opts.unix_paths[i].path;
             break;

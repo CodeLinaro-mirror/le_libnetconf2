@@ -83,7 +83,7 @@
     if (!(SIZE)) { \
         (ARRAY) = NULL; \
     } else { \
-        LY_ARRAY_CREATE_GOTO(NULL, ARRAY, SIZE, RET, GOTO); \
+        LYA_PREALLOC(ARRAY, SIZE, ERRMEM; RET = 1; goto GOTO); \
     }
 
 /**
@@ -202,13 +202,13 @@ error:
  * @return 0 on success, 1 on error.
  */
 static int
-nc_server_config_move_userord_item(const struct lyd_node *node, LY_ARRAY_COUNT_TYPE index, void *items,
+nc_server_config_move_userord_item(const struct lyd_node *node, LYA_COUNT_T index, void *items,
         uint32_t item_size, uint32_t name_offset)
 {
     int move = 0;
     const char *anchor = NULL, *name;
     uint32_t anchor_len = 0;
-    LY_ARRAY_COUNT_TYPE count, i, new_index;
+    LYA_COUNT_T count, i, new_index;
     char *item, *tmp;
 
     NC_CHECK_RET(nc_server_config_get_userord_anchor(node, &anchor, &anchor_len, &move));
@@ -217,7 +217,7 @@ nc_server_config_move_userord_item(const struct lyd_node *node, LY_ARRAY_COUNT_T
         return 0;
     }
 
-    count = LY_ARRAY_COUNT(items);
+    count = LYA_COUNT(items);
     assert(index < count);
 
     if (!anchor) {
@@ -276,14 +276,14 @@ nc_server_config_ssh_opts_free(struct nc_server_ssh_opts *opts)
     struct nc_hostkey *hostkey;
     struct nc_auth_client *auth_client;
     struct nc_public_key *pubkey;
-    LY_ARRAY_COUNT_TYPE i = 0, j = 0;
+    LYA_COUNT_T i = 0, j = 0;
 
     if (!opts) {
         return;
     }
 
     /* free hostkeys */
-    LY_ARRAY_FOR(opts->hostkeys, i) {
+    LYA_FOR(opts->hostkeys, i) {
         hostkey = &opts->hostkeys[i];
         free(hostkey->name);
         if (hostkey->store == NC_STORE_LOCAL) {
@@ -294,25 +294,25 @@ nc_server_config_ssh_opts_free(struct nc_server_ssh_opts *opts)
             free(hostkey->ks_ref);
         }
     }
-    LY_ARRAY_FREE(opts->hostkeys);
+    LYA_FREE(opts->hostkeys);
 
     /* free authorized clients */
-    LY_ARRAY_FOR(opts->auth_clients, i) {
+    LYA_FOR(opts->auth_clients, i) {
         auth_client = &opts->auth_clients[i];
         free(auth_client->username);
         if (auth_client->pubkey_store == NC_STORE_LOCAL) {
-            LY_ARRAY_FOR(auth_client->pubkeys, j) {
+            LYA_FOR(auth_client->pubkeys, j) {
                 pubkey = &auth_client->pubkeys[j];
                 free(pubkey->name);
                 free(pubkey->data);
             }
-            LY_ARRAY_FREE(auth_client->pubkeys);
+            LYA_FREE(auth_client->pubkeys);
         } else if (auth_client->pubkey_store == NC_STORE_TRUSTSTORE) {
             free(auth_client->ts_ref);
         }
         free(auth_client->password);
     }
-    LY_ARRAY_FREE(opts->auth_clients);
+    LYA_FREE(opts->auth_clients);
 
     free(opts->referenced_endpt_name);
     free(opts->hostkey_algs);
@@ -332,7 +332,7 @@ static void
 nc_server_config_tls_opts_free(struct nc_server_tls_opts *opts)
 {
     struct nc_ctn *ctn, *next;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     if (!opts) {
         return;
@@ -352,22 +352,22 @@ nc_server_config_tls_opts_free(struct nc_server_tls_opts *opts)
 
     /* free ca certificates */
     if (opts->client_auth.ca_certs_store == NC_STORE_LOCAL) {
-        LY_ARRAY_FOR(opts->client_auth.ca_certs, i) {
+        LYA_FOR(opts->client_auth.ca_certs, i) {
             free(opts->client_auth.ca_certs[i].name);
             free(opts->client_auth.ca_certs[i].data);
         }
-        LY_ARRAY_FREE(opts->client_auth.ca_certs);
+        LYA_FREE(opts->client_auth.ca_certs);
     } else if (opts->client_auth.ca_certs_store == NC_STORE_TRUSTSTORE) {
         free(opts->client_auth.ca_cert_bag_ts_ref);
     }
 
     /* free end-entity certificates */
     if (opts->client_auth.ee_certs_store == NC_STORE_LOCAL) {
-        LY_ARRAY_FOR(opts->client_auth.ee_certs, i) {
+        LYA_FOR(opts->client_auth.ee_certs, i) {
             free(opts->client_auth.ee_certs[i].name);
             free(opts->client_auth.ee_certs[i].data);
         }
-        LY_ARRAY_FREE(opts->client_auth.ee_certs);
+        LYA_FREE(opts->client_auth.ee_certs);
     } else if (opts->client_auth.ee_certs_store == NC_STORE_TRUSTSTORE) {
         free(opts->client_auth.ee_cert_bag_ts_ref);
     }
@@ -396,23 +396,23 @@ static void
 nc_server_config_unix_opts_free(struct nc_server_unix_opts *opts)
 {
     struct nc_server_unix_user_mapping *mapping;
-    LY_ARRAY_COUNT_TYPE i = 0, j = 0;
+    LYA_COUNT_T i = 0, j = 0;
 
     if (!opts) {
         return;
     }
 
     /* free user mappings */
-    LY_ARRAY_FOR(opts->user_mappings, i) {
+    LYA_FOR(opts->user_mappings, i) {
         mapping = &opts->user_mappings[i];
         free(mapping->system_user);
 
-        LY_ARRAY_FOR(mapping->allowed_users, j) {
+        LYA_FOR(mapping->allowed_users, j) {
             free(mapping->allowed_users[j]);
         }
-        LY_ARRAY_FREE(mapping->allowed_users);
+        LYA_FREE(mapping->allowed_users);
     }
-    LY_ARRAY_FREE(opts->user_mappings);
+    LYA_FREE(opts->user_mappings);
 
     free(opts);
 }
@@ -428,26 +428,26 @@ static void
 nc_server_config_keystore_free(struct nc_keystore *ks)
 {
     struct nc_keystore_entry *entry;
-    LY_ARRAY_COUNT_TYPE i = 0, j = 0;
+    LYA_COUNT_T i = 0, j = 0;
 
     if (!ks) {
         return;
     }
 
-    LY_ARRAY_FOR(ks->entries, i) {
+    LYA_FOR(ks->entries, i) {
         entry = &ks->entries[i];
         free(entry->asym_key.name);
         free(entry->asym_key.pubkey.data);
         free(entry->asym_key.privkey.data);
 
         /* free certificates */
-        LY_ARRAY_FOR(entry->certs, j) {
+        LYA_FOR(entry->certs, j) {
             free(entry->certs[j].name);
             free(entry->certs[j].data);
         }
-        LY_ARRAY_FREE(entry->certs);
+        LYA_FREE(entry->certs);
     }
-    LY_ARRAY_FREE(ks->entries);
+    LYA_FREE(ks->entries);
 
     memset(ks, 0, sizeof(*ks));
 }
@@ -462,39 +462,39 @@ nc_server_config_truststore_free(struct nc_truststore *ts)
 {
     struct nc_certificate_bag *cbag;
     struct nc_public_key_bag *pkbag;
-    LY_ARRAY_COUNT_TYPE i = 0, j = 0;
+    LYA_COUNT_T i = 0, j = 0;
 
     if (!ts) {
         return;
     }
 
     /* free certificate bags */
-    LY_ARRAY_FOR(ts->cert_bags, i) {
+    LYA_FOR(ts->cert_bags, i) {
         cbag = &ts->cert_bags[i];
 
         free(cbag->name);
         free(cbag->description);
-        LY_ARRAY_FOR(cbag->certs, j) {
+        LYA_FOR(cbag->certs, j) {
             free(cbag->certs[j].name);
             free(cbag->certs[j].data);
         }
-        LY_ARRAY_FREE(cbag->certs);
+        LYA_FREE(cbag->certs);
     }
-    LY_ARRAY_FREE(ts->cert_bags);
+    LYA_FREE(ts->cert_bags);
 
     /* free public key bags */
-    LY_ARRAY_FOR(ts->pubkey_bags, i) {
+    LYA_FOR(ts->pubkey_bags, i) {
         pkbag = &ts->pubkey_bags[i];
 
         free(pkbag->name);
         free(pkbag->description);
-        LY_ARRAY_FOR(pkbag->pubkeys, j) {
+        LYA_FOR(pkbag->pubkeys, j) {
             free(pkbag->pubkeys[j].name);
             free(pkbag->pubkeys[j].data);
         }
-        LY_ARRAY_FREE(pkbag->pubkeys);
+        LYA_FREE(pkbag->pubkeys);
     }
-    LY_ARRAY_FREE(ts->pubkey_bags);
+    LYA_FREE(ts->pubkey_bags);
 
     memset(ts, 0, sizeof(*ts));
 }
@@ -515,29 +515,29 @@ nc_server_config_free(struct nc_server_config *config)
     struct nc_endpt *endpt;
     struct nc_ch_client *ch_client;
     struct nc_ch_endpt *ch_endpt;
-    LY_ARRAY_COUNT_TYPE i = 0, j = 0;
+    LYA_COUNT_T i = 0, j = 0;
 
     if (!config) {
         return;
     }
 
     /* free ignored hello modules */
-    LY_ARRAY_FOR(config->ignored_modules, i) {
+    LYA_FOR(config->ignored_modules, i) {
         free(config->ignored_modules[i]);
     }
-    LY_ARRAY_FREE(config->ignored_modules);
+    LYA_FREE(config->ignored_modules);
 
     /* free listen endpoints */
-    LY_ARRAY_FOR(config->endpts, i) {
+    LYA_FOR(config->endpts, i) {
         endpt = &config->endpts[i];
 
         free(endpt->name);
 
         /* free binds, the listening sockets are owned by the bind registry */
-        LY_ARRAY_FOR(endpt->binds, j) {
+        LYA_FOR(endpt->binds, j) {
             free(endpt->binds[j].address);
         }
-        LY_ARRAY_FREE(endpt->binds);
+        LYA_FREE(endpt->binds);
 
         /* free transport specific options */
         switch (endpt->ti) {
@@ -557,16 +557,16 @@ nc_server_config_free(struct nc_server_config *config)
             break;
         }
     }
-    LY_ARRAY_FREE(config->endpts);
+    LYA_FREE(config->endpts);
 
     /* free call home clients */
-    LY_ARRAY_FOR(config->ch_clients, i) {
+    LYA_FOR(config->ch_clients, i) {
         ch_client = &config->ch_clients[i];
 
         free(ch_client->name);
 
         /* free call home endpoints */
-        LY_ARRAY_FOR(ch_client->ch_endpts, j) {
+        LYA_FOR(ch_client->ch_endpts, j) {
             ch_endpt = &ch_client->ch_endpts[j];
 
             free(ch_endpt->name);
@@ -588,9 +588,9 @@ nc_server_config_free(struct nc_server_config *config)
                 break;
             }
         }
-        LY_ARRAY_FREE(ch_client->ch_endpts);
+        LYA_FREE(ch_client->ch_endpts);
     }
-    LY_ARRAY_FREE(config->ch_clients);
+    LYA_FREE(config->ch_clients);
 
 #ifdef NC_ENABLED_SSH_TLS
     /* free keystore and truststore */
@@ -598,7 +598,7 @@ nc_server_config_free(struct nc_server_config *config)
     nc_server_config_truststore_free(&config->truststore);
 
     /* free certificate expiration intervals */
-    LY_ARRAY_FREE(config->cert_exp_notif_intervals);
+    LYA_FREE(config->cert_exp_notif_intervals);
 #endif /* NC_ENABLED_SSH_TLS */
 
     memset(config, 0, sizeof(*config));
@@ -783,7 +783,7 @@ config_local_bind(const struct lyd_node *node, enum nc_operation parent_op, stru
     enum nc_operation op;
     struct nc_bind *bind = NULL;
     const char *local_addr;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -794,19 +794,19 @@ config_local_bind(const struct lyd_node *node, enum nc_operation parent_op, stru
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the bind we are deleting/modifying */
-        LY_ARRAY_FOR(endpt->binds, i) {
+        LYA_FOR(endpt->binds, i) {
             if (!strcmp(endpt->binds[i].address, local_addr)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(endpt->binds)) {
+        if (i == LYA_COUNT(endpt->binds)) {
             ERR(NULL, "Local bind with address \"%s\" not found.", local_addr);
             return 1;
         }
         bind = &endpt->binds[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new bind */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), endpt->binds, bind, 1);
+        LYA_ADD_ITEM(endpt->binds, bind, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -823,10 +823,10 @@ config_local_bind(const struct lyd_node *node, enum nc_operation parent_op, stru
 
     /* all children processed, we can now delete the bind */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(endpt->binds) - 1) {
-            endpt->binds[i] = endpt->binds[LY_ARRAY_COUNT(endpt->binds) - 1];
+        if (i < LYA_COUNT(endpt->binds) - 1) {
+            endpt->binds[i] = endpt->binds[LYA_COUNT(endpt->binds) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(endpt->binds);
+        LYA_DECREMENT_FREE(endpt->binds);
     }
 
     return 0;
@@ -1157,7 +1157,7 @@ config_ssh_hostkey(const struct lyd_node *node, enum nc_operation parent_op, str
     enum nc_operation op;
     struct nc_hostkey *hostkey = NULL;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -1169,20 +1169,20 @@ config_ssh_hostkey(const struct lyd_node *node, enum nc_operation parent_op, str
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE) || (op == NC_OP_REPLACE)) {
         /* find the hostkey we are deleting/modifying/moving, the list is ordered-by user so a moved
          * entry is reported as replaced, but its contents do not change */
-        LY_ARRAY_FOR(ssh->hostkeys, i) {
+        LYA_FOR(ssh->hostkeys, i) {
             if (!strcmp(ssh->hostkeys[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(ssh->hostkeys)) {
+        if (i == LYA_COUNT(ssh->hostkeys)) {
             ERR(NULL, "Hostkey with name \"%s\" not found.", name);
             return 1;
         }
         hostkey = &ssh->hostkeys[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new hostkey */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), ssh->hostkeys, hostkey, 1);
-        i = LY_ARRAY_COUNT(ssh->hostkeys) - 1;
+        LYA_ADD_ITEM(ssh->hostkeys, hostkey, ERRMEM; return 1);
+        i = LYA_COUNT(ssh->hostkeys) - 1;
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -1206,11 +1206,11 @@ config_ssh_hostkey(const struct lyd_node *node, enum nc_operation parent_op, str
     /* all children processed, we can now delete the hostkey */
     if (op == NC_OP_DELETE) {
         /* the list is ordered-by user, shift the rest instead of swapping the last hostkey in */
-        if (i < LY_ARRAY_COUNT(ssh->hostkeys) - 1) {
+        if (i < LYA_COUNT(ssh->hostkeys) - 1) {
             memmove(&ssh->hostkeys[i], &ssh->hostkeys[i + 1],
-                    (LY_ARRAY_COUNT(ssh->hostkeys) - i - 1) * sizeof *ssh->hostkeys);
+                    (LYA_COUNT(ssh->hostkeys) - i - 1) * sizeof *ssh->hostkeys);
         }
-        LY_ARRAY_DECREMENT_FREE(ssh->hostkeys);
+        LYA_DECREMENT_FREE(ssh->hostkeys);
     } else if ((op == NC_OP_CREATE) || (op == NC_OP_REPLACE)) {
         /* the list is ordered-by user, place the hostkey at its configured position */
         NC_CHECK_RET(nc_server_config_move_userord_item(node, i, ssh->hostkeys,
@@ -1310,7 +1310,7 @@ config_ssh_user_public_key(const struct lyd_node *node, enum nc_operation parent
     enum nc_operation op;
     struct lyd_node *n;
     struct nc_public_key *key = NULL;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     const char *name;
 
     NC_NODE_GET_OP(node, parent_op, &op);
@@ -1322,19 +1322,19 @@ config_ssh_user_public_key(const struct lyd_node *node, enum nc_operation parent
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the public key we are deleting/modifying */
-        LY_ARRAY_FOR(user->pubkeys, i) {
+        LYA_FOR(user->pubkeys, i) {
             if (!strcmp(user->pubkeys[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(user->pubkeys)) {
+        if (i == LYA_COUNT(user->pubkeys)) {
             ERR(NULL, "Public key with name \"%s\" not found.", name);
             return 1;
         }
         key = &user->pubkeys[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new public key */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), user->pubkeys, key, 1);
+        LYA_ADD_ITEM(user->pubkeys, key, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -1357,10 +1357,10 @@ config_ssh_user_public_key(const struct lyd_node *node, enum nc_operation parent
 
     /* all children processed, we can now delete the public key */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(user->pubkeys) - 1) {
-            user->pubkeys[i] = user->pubkeys[LY_ARRAY_COUNT(user->pubkeys) - 1];
+        if (i < LYA_COUNT(user->pubkeys) - 1) {
+            user->pubkeys[i] = user->pubkeys[LYA_COUNT(user->pubkeys) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(user->pubkeys);
+        LYA_DECREMENT_FREE(user->pubkeys);
     }
 
     return 0;
@@ -1564,19 +1564,19 @@ config_ssh_user(const struct lyd_node *node, enum nc_operation parent_op, struct
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the user we are deleting */
-        LY_ARRAY_FOR(ssh->auth_clients, i) {
+        LYA_FOR(ssh->auth_clients, i) {
             if (!strcmp(ssh->auth_clients[i].username, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(ssh->auth_clients)) {
+        if (i == LYA_COUNT(ssh->auth_clients)) {
             ERR(NULL, "SSH user with name \"%s\" not found.", name);
             return 1;
         }
         user = &ssh->auth_clients[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new user */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), ssh->auth_clients, user, 1);
+        LYA_ADD_ITEM(ssh->auth_clients, user, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -1617,10 +1617,10 @@ config_ssh_user(const struct lyd_node *node, enum nc_operation parent_op, struct
 
     /* all children processed, we can now delete the user */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(ssh->auth_clients) - 1) {
-            ssh->auth_clients[i] = ssh->auth_clients[LY_ARRAY_COUNT(ssh->auth_clients) - 1];
+        if (i < LYA_COUNT(ssh->auth_clients) - 1) {
+            ssh->auth_clients[i] = ssh->auth_clients[LYA_COUNT(ssh->auth_clients) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(ssh->auth_clients);
+        LYA_DECREMENT_FREE(ssh->auth_clients);
     }
 
     return 0;
@@ -2393,7 +2393,7 @@ config_tls_client_auth_ca_cert(const struct lyd_node *node,
     enum nc_operation op;
     struct lyd_node *n;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct nc_certificate *cert = NULL;
 
     NC_NODE_GET_OP(node, parent_op, &op);
@@ -2405,19 +2405,19 @@ config_tls_client_auth_ca_cert(const struct lyd_node *node,
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the ca-cert we are deleting/modifying */
-        LY_ARRAY_FOR(client_auth->ca_certs, i) {
+        LYA_FOR(client_auth->ca_certs, i) {
             if (!strcmp(client_auth->ca_certs[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(client_auth->ca_certs)) {
+        if (i == LYA_COUNT(client_auth->ca_certs)) {
             ERR(NULL, "CA certificate \"%s\" not found.", name);
             return 1;
         }
         cert = &client_auth->ca_certs[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new ca-cert */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), client_auth->ca_certs, cert, 1);
+        LYA_ADD_ITEM(client_auth->ca_certs, cert, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -2440,10 +2440,10 @@ config_tls_client_auth_ca_cert(const struct lyd_node *node,
 
     /* all children processed, we can now delete the ca-cert */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(client_auth->ca_certs) - 1) {
-            client_auth->ca_certs[i] = client_auth->ca_certs[LY_ARRAY_COUNT(client_auth->ca_certs) - 1];
+        if (i < LYA_COUNT(client_auth->ca_certs) - 1) {
+            client_auth->ca_certs[i] = client_auth->ca_certs[LYA_COUNT(client_auth->ca_certs) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(client_auth->ca_certs);
+        LYA_DECREMENT_FREE(client_auth->ca_certs);
     }
 
     return 0;
@@ -2522,7 +2522,7 @@ config_tls_client_auth_ee_cert(const struct lyd_node *node,
     enum nc_operation op;
     struct lyd_node *n;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct nc_certificate *cert = NULL;
 
     NC_NODE_GET_OP(node, parent_op, &op);
@@ -2534,19 +2534,19 @@ config_tls_client_auth_ee_cert(const struct lyd_node *node,
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the ee-cert we are deleting/modifying */
-        LY_ARRAY_FOR(client_auth->ee_certs, i) {
+        LYA_FOR(client_auth->ee_certs, i) {
             if (!strcmp(client_auth->ee_certs[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(client_auth->ee_certs)) {
+        if (i == LYA_COUNT(client_auth->ee_certs)) {
             ERR(NULL, "End-entity certificate \"%s\" not found.", name);
             return 1;
         }
         cert = &client_auth->ee_certs[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new ee-cert */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), client_auth->ee_certs, cert, 1);
+        LYA_ADD_ITEM(client_auth->ee_certs, cert, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -2569,10 +2569,10 @@ config_tls_client_auth_ee_cert(const struct lyd_node *node,
 
     /* all children processed, we can now delete the ee-cert */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(client_auth->ee_certs) - 1) {
-            client_auth->ee_certs[i] = client_auth->ee_certs[LY_ARRAY_COUNT(client_auth->ee_certs) - 1];
+        if (i < LYA_COUNT(client_auth->ee_certs) - 1) {
+            client_auth->ee_certs[i] = client_auth->ee_certs[LYA_COUNT(client_auth->ee_certs) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(client_auth->ee_certs);
+        LYA_DECREMENT_FREE(client_auth->ee_certs);
     }
 
     return 0;
@@ -3170,7 +3170,7 @@ config_unix_socket_path(const struct lyd_node *node, enum nc_operation parent_op
             return 1;
         }
         free(endpt->binds[0].address);
-        LY_ARRAY_FREE(endpt->binds);
+        LYA_FREE(endpt->binds);
 
         /* also clear the cleartext path flag */
         opts->path_type = NC_UNIX_SOCKET_PATH_UNKNOWN;
@@ -3180,7 +3180,7 @@ config_unix_socket_path(const struct lyd_node *node, enum nc_operation parent_op
             ERR(NULL, "UNIX socket path binding already exists.");
             return 1;
         }
-        LY_ARRAY_NEW_RET(LYD_CTX(node), endpt->binds, bind, 1);
+        LYA_ADD_ITEM(endpt->binds, bind, ERRMEM; return 1);
         bind->address = strdup(lyd_get_value(node));
         NC_CHECK_ERRMEM_RET(!bind->address, 1);
 
@@ -3195,7 +3195,6 @@ static int
 config_unix_hidden_path(const struct lyd_node *node, enum nc_operation parent_op, struct nc_endpt *endpt)
 {
     enum nc_operation op;
-    struct nc_bind *bind;
     struct nc_server_unix_opts *opts;
 
     NC_NODE_GET_OP(node, parent_op, &op);
@@ -3209,7 +3208,7 @@ config_unix_hidden_path(const struct lyd_node *node, enum nc_operation parent_op
             ERR(NULL, "No UNIX socket hidden path binding to delete.");
             return 1;
         }
-        LY_ARRAY_FREE(endpt->binds);
+        LYA_FREE(endpt->binds);
 
         /* also clear the hidden path flag */
         opts->path_type = NC_UNIX_SOCKET_PATH_UNKNOWN;
@@ -3220,7 +3219,7 @@ config_unix_hidden_path(const struct lyd_node *node, enum nc_operation parent_op
             ERR(NULL, "UNIX socket hidden path binding already exists.");
             return 1;
         }
-        LY_ARRAY_NEW_RET(LYD_CTX(node), endpt->binds, bind, 1);
+        LYA_ADD(endpt->binds, ERRMEM; return 1);
 
         /* also set the hidden path flag */
         opts->path_type = NC_UNIX_SOCKET_PATH_HIDDEN;
@@ -3348,7 +3347,7 @@ static int
 config_unix_user_mapping_netconf_user(const struct lyd_node *node, enum nc_operation parent_op, struct nc_server_unix_user_mapping *mapping)
 {
     enum nc_operation op;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     const char *user;
     char **allowed_user;
 
@@ -3359,13 +3358,13 @@ config_unix_user_mapping_netconf_user(const struct lyd_node *node, enum nc_opera
 
     if (op == NC_OP_DELETE) {
         /* delete the user from the list */
-        LY_ARRAY_FOR(mapping->allowed_users, i) {
+        LYA_FOR(mapping->allowed_users, i) {
             if (!strcmp(mapping->allowed_users[i], user)) {
                 break;
             }
         }
 
-        if (i == LY_ARRAY_COUNT(mapping->allowed_users)) {
+        if (i == LYA_COUNT(mapping->allowed_users)) {
             ERR(NULL, "Trying to delete a non-existing NETCONF user \"%s\" from the UNIX user mapping \"%s\".",
                     user, mapping->system_user);
             return 1;
@@ -3373,25 +3372,25 @@ config_unix_user_mapping_netconf_user(const struct lyd_node *node, enum nc_opera
 
         /* free the user and replace it with the last one */
         free(mapping->allowed_users[i]);
-        if (i < LY_ARRAY_COUNT(mapping->allowed_users) - 1) {
-            mapping->allowed_users[i] = mapping->allowed_users[LY_ARRAY_COUNT(mapping->allowed_users) - 1];
+        if (i < LYA_COUNT(mapping->allowed_users) - 1) {
+            mapping->allowed_users[i] = mapping->allowed_users[LYA_COUNT(mapping->allowed_users) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(mapping->allowed_users);
+        LYA_DECREMENT_FREE(mapping->allowed_users);
     } else if (op == NC_OP_CREATE) {
         /* add the user to the list, if it does not already exist */
-        LY_ARRAY_FOR(mapping->allowed_users, i) {
+        LYA_FOR(mapping->allowed_users, i) {
             if (!strcmp(mapping->allowed_users[i], user)) {
                 break;
             }
         }
 
-        if (i < LY_ARRAY_COUNT(mapping->allowed_users)) {
+        if (i < LYA_COUNT(mapping->allowed_users)) {
             ERR(NULL, "Trying to create an already existing NETCONF user \"%s\" in the UNIX user mapping \"%s\".",
                     user, mapping->system_user);
             return 1;
         }
 
-        LY_ARRAY_NEW_RET(LYD_CTX(node), mapping->allowed_users, allowed_user, 1);
+        LYA_ADD_ITEM(mapping->allowed_users, allowed_user, ERRMEM; return 1);
         *allowed_user = strdup(user);
         NC_CHECK_ERRMEM_RET(!*allowed_user, 1);
     }
@@ -3406,7 +3405,7 @@ config_unix_user_mapping(const struct lyd_node *node, enum nc_operation parent_o
     enum nc_operation op;
     struct nc_server_unix_user_mapping *mapping = NULL;
     const char *system_user;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct ly_set *set = NULL;
     uint32_t j;
 
@@ -3419,19 +3418,19 @@ config_unix_user_mapping(const struct lyd_node *node, enum nc_operation parent_o
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the user mapping we are deleting/modifying */
-        LY_ARRAY_FOR(unix->user_mappings, i) {
+        LYA_FOR(unix->user_mappings, i) {
             if (!strcmp(unix->user_mappings[i].system_user, system_user)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(unix->user_mappings)) {
+        if (i == LYA_COUNT(unix->user_mappings)) {
             ERR(NULL, "UNIX user mapping with system user \"%s\" not found.", system_user);
             return 1;
         }
         mapping = &unix->user_mappings[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new user mapping */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), unix->user_mappings, mapping, 1);
+        LYA_ADD_ITEM(unix->user_mappings, mapping, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -3448,10 +3447,10 @@ config_unix_user_mapping(const struct lyd_node *node, enum nc_operation parent_o
 
     /* all children processed, we can now delete the user mapping */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(unix->user_mappings) - 1) {
-            unix->user_mappings[i] = unix->user_mappings[LY_ARRAY_COUNT(unix->user_mappings) - 1];
+        if (i < LYA_COUNT(unix->user_mappings) - 1) {
+            unix->user_mappings[i] = unix->user_mappings[LYA_COUNT(unix->user_mappings) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(unix->user_mappings);
+        LYA_DECREMENT_FREE(unix->user_mappings);
     }
 
 cleanup:
@@ -3550,7 +3549,7 @@ config_endpoint(const struct lyd_node *node, enum nc_operation parent_op,
     enum nc_operation op;
     struct nc_endpt *endpt = NULL;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -3561,19 +3560,19 @@ config_endpoint(const struct lyd_node *node, enum nc_operation parent_op,
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* get the endpoint we are deleting/modifying */
-        LY_ARRAY_FOR(config->endpts, i) {
+        LYA_FOR(config->endpts, i) {
             if (!strcmp(config->endpts[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(config->endpts)) {
+        if (i == LYA_COUNT(config->endpts)) {
             ERR(NULL, "Endpoint \"%s\" not found.", name);
             return 1;
         }
         endpt = &config->endpts[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new endpoint */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), config->endpts, endpt, 1);
+        LYA_ADD_ITEM(config->endpts, endpt, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -3601,10 +3600,10 @@ config_endpoint(const struct lyd_node *node, enum nc_operation parent_op,
 
     /* all children processed, we can now delete the endpoint */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(config->endpts) - 1) {
-            config->endpts[i] = config->endpts[LY_ARRAY_COUNT(config->endpts) - 1];
+        if (i < LYA_COUNT(config->endpts) - 1) {
+            config->endpts[i] = config->endpts[LYA_COUNT(config->endpts) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(config->endpts);
+        LYA_DECREMENT_FREE(config->endpts);
     }
 
     return 0;
@@ -3906,7 +3905,7 @@ config_ch_client_endpoint(const struct lyd_node *node, enum nc_operation parent_
     struct lyd_node *n;
     enum nc_operation op;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct nc_ch_endpt *endpt = NULL;
 
     NC_NODE_GET_OP(node, parent_op, &op);
@@ -3919,20 +3918,20 @@ config_ch_client_endpoint(const struct lyd_node *node, enum nc_operation parent_
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE) || (op == NC_OP_REPLACE)) {
         /* find the endpoint we are deleting/modifying/moving, the list is ordered-by user so a moved
          * entry is reported as replaced, but its contents do not change */
-        LY_ARRAY_FOR(ch_client->ch_endpts, i) {
+        LYA_FOR(ch_client->ch_endpts, i) {
             if (!strcmp(ch_client->ch_endpts[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(ch_client->ch_endpts)) {
+        if (i == LYA_COUNT(ch_client->ch_endpts)) {
             ERR(NULL, "Call Home client \"%s\" endpoint \"%s\" not found.", ch_client->name, name);
             return 1;
         }
         endpt = &ch_client->ch_endpts[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new endpoint and init it */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), ch_client->ch_endpts, endpt, 1);
-        i = LY_ARRAY_COUNT(ch_client->ch_endpts) - 1;
+        LYA_ADD_ITEM(ch_client->ch_endpts, endpt, ERRMEM; return 1);
+        i = LYA_COUNT(ch_client->ch_endpts) - 1;
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -3958,11 +3957,11 @@ config_ch_client_endpoint(const struct lyd_node *node, enum nc_operation parent_
     /* all children processed, we can now delete the endpoint */
     if (op == NC_OP_DELETE) {
         /* the list is ordered-by user, shift the rest instead of swapping the last endpoint in */
-        if (i < LY_ARRAY_COUNT(ch_client->ch_endpts) - 1) {
+        if (i < LYA_COUNT(ch_client->ch_endpts) - 1) {
             memmove(&ch_client->ch_endpts[i], &ch_client->ch_endpts[i + 1],
-                    (LY_ARRAY_COUNT(ch_client->ch_endpts) - i - 1) * sizeof *ch_client->ch_endpts);
+                    (LYA_COUNT(ch_client->ch_endpts) - i - 1) * sizeof *ch_client->ch_endpts);
         }
-        LY_ARRAY_DECREMENT_FREE(ch_client->ch_endpts);
+        LYA_DECREMENT_FREE(ch_client->ch_endpts);
     } else if ((op == NC_OP_CREATE) || (op == NC_OP_REPLACE)) {
         /* the list is ordered-by user, place the endpoint at its configured position */
         NC_CHECK_RET(nc_server_config_move_userord_item(node, i, ch_client->ch_endpts,
@@ -4182,7 +4181,7 @@ config_netconf_client(const struct lyd_node *node, enum nc_operation parent_op,
     struct lyd_node *n;
     enum nc_operation op;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct nc_ch_client *ch_client = NULL;
 
     NC_NODE_GET_OP(node, parent_op, &op);
@@ -4194,19 +4193,19 @@ config_netconf_client(const struct lyd_node *node, enum nc_operation parent_op,
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the client we are deleting/modifying */
-        LY_ARRAY_FOR(config->ch_clients, i) {
+        LYA_FOR(config->ch_clients, i) {
             if (!strcmp(config->ch_clients[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(config->ch_clients)) {
+        if (i == LYA_COUNT(config->ch_clients)) {
             ERR(NULL, "Call Home client \"%s\" not found.", name);
             return 1;
         }
         ch_client = &config->ch_clients[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new client */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), config->ch_clients, ch_client, 1);
+        LYA_ADD_ITEM(config->ch_clients, ch_client, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -4236,10 +4235,10 @@ config_netconf_client(const struct lyd_node *node, enum nc_operation parent_op,
     /* all children processed, we can now delete the client */
     if (op == NC_OP_DELETE) {
         /* we can use 'i' from above */
-        if (i < LY_ARRAY_COUNT(config->ch_clients) - 1) {
-            config->ch_clients[i] = config->ch_clients[LY_ARRAY_COUNT(config->ch_clients) - 1];
+        if (i < LYA_COUNT(config->ch_clients) - 1) {
+            config->ch_clients[i] = config->ch_clients[LYA_COUNT(config->ch_clients) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(config->ch_clients);
+        LYA_DECREMENT_FREE(config->ch_clients);
     }
 
     return 0;
@@ -4415,7 +4414,7 @@ config_asymmetric_key_cert(const struct lyd_node *node, enum nc_operation parent
     enum nc_operation op;
     struct nc_certificate *cert = NULL;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -4426,19 +4425,19 @@ config_asymmetric_key_cert(const struct lyd_node *node, enum nc_operation parent
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the certificate we are deleting */
-        LY_ARRAY_FOR(entry->certs, i) {
+        LYA_FOR(entry->certs, i) {
             if (!strcmp(entry->certs[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(entry->certs)) {
+        if (i == LYA_COUNT(entry->certs)) {
             ERR(NULL, "Certificate \"%s\" not found for asymmetric key \"%s\".", name, entry->asym_key.name);
             return 1;
         }
         cert = &entry->certs[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new certificate */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), entry->certs, cert, 1);
+        LYA_ADD_ITEM(entry->certs, cert, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -4461,10 +4460,10 @@ config_asymmetric_key_cert(const struct lyd_node *node, enum nc_operation parent
 
     /* all children processed, we can now delete the certificate */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(entry->certs) - 1) {
-            entry->certs[i] = entry->certs[LY_ARRAY_COUNT(entry->certs) - 1];
+        if (i < LYA_COUNT(entry->certs) - 1) {
+            entry->certs[i] = entry->certs[LYA_COUNT(entry->certs) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(entry->certs);
+        LYA_DECREMENT_FREE(entry->certs);
     }
 
     return 0;
@@ -4493,7 +4492,7 @@ config_asymmetric_key(const struct lyd_node *node, enum nc_operation parent_op, 
     enum nc_operation op;
     const char *name;
     struct nc_keystore_entry *entry = NULL;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -4504,19 +4503,19 @@ config_asymmetric_key(const struct lyd_node *node, enum nc_operation parent_op, 
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the asymmetric key (keystore entry) we are deleting */
-        LY_ARRAY_FOR(keystore->entries, i) {
+        LYA_FOR(keystore->entries, i) {
             if (!strcmp(keystore->entries[i].asym_key.name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(keystore->entries)) {
+        if (i == LYA_COUNT(keystore->entries)) {
             ERR(NULL, "Asymmetric key \"%s\" not found.", name);
             return 1;
         }
         entry = &keystore->entries[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new asymmetric key entry */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), keystore->entries, entry, 1);
+        LYA_ADD_ITEM(keystore->entries, entry, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -4571,10 +4570,10 @@ config_asymmetric_key(const struct lyd_node *node, enum nc_operation parent_op, 
 
     /* all children processed, we can now delete the asymmetric key entry */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(keystore->entries) - 1) {
-            keystore->entries[i] = keystore->entries[LY_ARRAY_COUNT(keystore->entries) - 1];
+        if (i < LYA_COUNT(keystore->entries) - 1) {
+            keystore->entries[i] = keystore->entries[LYA_COUNT(keystore->entries) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(keystore->entries);
+        LYA_DECREMENT_FREE(keystore->entries);
     }
 
     return 0;
@@ -4718,7 +4717,7 @@ config_certificate_bag_cert(const struct lyd_node *node, enum nc_operation paren
     enum nc_operation op;
     struct nc_certificate *cert = NULL;
     const char *name;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -4729,19 +4728,19 @@ config_certificate_bag_cert(const struct lyd_node *node, enum nc_operation paren
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the certificate we are deleting */
-        LY_ARRAY_FOR(bag->certs, i) {
+        LYA_FOR(bag->certs, i) {
             if (!strcmp(bag->certs[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(bag->certs)) {
+        if (i == LYA_COUNT(bag->certs)) {
             ERR(NULL, "Certificate \"%s\" not found in certificate bag \"%s\".", name, bag->name);
             return 1;
         }
         cert = &bag->certs[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new certificate */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), bag->certs, cert, 1);
+        LYA_ADD_ITEM(bag->certs, cert, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -4764,10 +4763,10 @@ config_certificate_bag_cert(const struct lyd_node *node, enum nc_operation paren
 
     /* all children processed, we can now delete the certificate */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(bag->certs) - 1) {
-            bag->certs[i] = bag->certs[LY_ARRAY_COUNT(bag->certs) - 1];
+        if (i < LYA_COUNT(bag->certs) - 1) {
+            bag->certs[i] = bag->certs[LYA_COUNT(bag->certs) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(bag->certs);
+        LYA_DECREMENT_FREE(bag->certs);
     }
 
     return 0;
@@ -4780,7 +4779,7 @@ config_certificate_bag(const struct lyd_node *node, enum nc_operation parent_op,
     enum nc_operation op;
     const char *name;
     struct nc_certificate_bag *bag = NULL;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     uint32_t j;
     struct ly_set *set = NULL;
 
@@ -4793,19 +4792,19 @@ config_certificate_bag(const struct lyd_node *node, enum nc_operation parent_op,
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the certificate bag we are deleting */
-        LY_ARRAY_FOR(truststore->cert_bags, i) {
+        LYA_FOR(truststore->cert_bags, i) {
             if (!strcmp(truststore->cert_bags[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(truststore->cert_bags)) {
+        if (i == LYA_COUNT(truststore->cert_bags)) {
             ERR(NULL, "Certificate bag \"%s\" not found.", name);
             return 1;
         }
         bag = &truststore->cert_bags[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new certificate bag */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), truststore->cert_bags, bag, 1);
+        LYA_ADD_ITEM(truststore->cert_bags, bag, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -4828,10 +4827,10 @@ config_certificate_bag(const struct lyd_node *node, enum nc_operation parent_op,
 
     /* all children processed, we can now delete the certificate bag */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(truststore->cert_bags) - 1) {
-            truststore->cert_bags[i] = truststore->cert_bags[LY_ARRAY_COUNT(truststore->cert_bags) - 1];
+        if (i < LYA_COUNT(truststore->cert_bags) - 1) {
+            truststore->cert_bags[i] = truststore->cert_bags[LYA_COUNT(truststore->cert_bags) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(truststore->cert_bags);
+        LYA_DECREMENT_FREE(truststore->cert_bags);
     }
 
 cleanup:
@@ -4919,7 +4918,7 @@ config_public_key_bag_pubkey(const struct lyd_node *node, enum nc_operation pare
     enum nc_operation op;
     const char *name;
     struct nc_public_key *pubkey = NULL;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
 
     NC_NODE_GET_OP(node, parent_op, &op);
 
@@ -4930,19 +4929,19 @@ config_public_key_bag_pubkey(const struct lyd_node *node, enum nc_operation pare
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the public key we are deleting */
-        LY_ARRAY_FOR(bag->pubkeys, i) {
+        LYA_FOR(bag->pubkeys, i) {
             if (!strcmp(bag->pubkeys[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(bag->pubkeys)) {
+        if (i == LYA_COUNT(bag->pubkeys)) {
             ERR(NULL, "Public key \"%s\" not found in public key bag \"%s\".", name, bag->name);
             return 1;
         }
         pubkey = &bag->pubkeys[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new public key */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), bag->pubkeys, pubkey, 1);
+        LYA_ADD_ITEM(bag->pubkeys, pubkey, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -4965,10 +4964,10 @@ config_public_key_bag_pubkey(const struct lyd_node *node, enum nc_operation pare
 
     /* all children processed, we can now delete the public key */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(bag->pubkeys) - 1) {
-            bag->pubkeys[i] = bag->pubkeys[LY_ARRAY_COUNT(bag->pubkeys) - 1];
+        if (i < LYA_COUNT(bag->pubkeys) - 1) {
+            bag->pubkeys[i] = bag->pubkeys[LYA_COUNT(bag->pubkeys) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(bag->pubkeys);
+        LYA_DECREMENT_FREE(bag->pubkeys);
     }
 
     return 0;
@@ -4981,7 +4980,7 @@ config_public_key_bag(const struct lyd_node *node, enum nc_operation parent_op, 
     enum nc_operation op;
     const char *name;
     struct nc_public_key_bag *bag = NULL;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct ly_set *set = NULL;
     uint32_t j;
 
@@ -4994,19 +4993,19 @@ config_public_key_bag(const struct lyd_node *node, enum nc_operation parent_op, 
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* find the public key bag we are deleting */
-        LY_ARRAY_FOR(truststore->pubkey_bags, i) {
+        LYA_FOR(truststore->pubkey_bags, i) {
             if (!strcmp(truststore->pubkey_bags[i].name, name)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(truststore->pubkey_bags)) {
+        if (i == LYA_COUNT(truststore->pubkey_bags)) {
             ERR(NULL, "Public key bag \"%s\" not found.", name);
             return 1;
         }
         bag = &truststore->pubkey_bags[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new public key bag */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), truststore->pubkey_bags, bag, 1);
+        LYA_ADD_ITEM(truststore->pubkey_bags, bag, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -5029,10 +5028,10 @@ config_public_key_bag(const struct lyd_node *node, enum nc_operation parent_op, 
 
     /* all children processed, we can now delete the public key bag */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(truststore->pubkey_bags) - 1) {
-            truststore->pubkey_bags[i] = truststore->pubkey_bags[LY_ARRAY_COUNT(truststore->pubkey_bags) - 1];
+        if (i < LYA_COUNT(truststore->pubkey_bags) - 1) {
+            truststore->pubkey_bags[i] = truststore->pubkey_bags[LYA_COUNT(truststore->pubkey_bags) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(truststore->pubkey_bags);
+        LYA_DECREMENT_FREE(truststore->pubkey_bags);
     }
 
 cleanup:
@@ -5216,7 +5215,7 @@ config_cert_exp_notif_interval(const struct lyd_node *node, enum nc_operation pa
     struct lyd_node *anchor_node, *period_node;
     enum nc_operation op;
     const char *anchor_str, *period_str;
-    LY_ARRAY_COUNT_TYPE i = 0;
+    LYA_COUNT_T i = 0;
     struct nc_cert_exp_time anchor = {0}, period = {0};
     struct nc_cert_exp_time_interval *interval = NULL;
 
@@ -5236,21 +5235,21 @@ config_cert_exp_notif_interval(const struct lyd_node *node, enum nc_operation pa
 
     if ((op == NC_OP_DELETE) || (op == NC_OP_NONE)) {
         /* get the interval we are deleting/modifying */
-        LY_ARRAY_FOR(config->cert_exp_notif_intervals, i) {
+        LYA_FOR(config->cert_exp_notif_intervals, i) {
             if (!memcmp(&config->cert_exp_notif_intervals[i].anchor, &anchor, sizeof anchor) &&
                     !memcmp(&config->cert_exp_notif_intervals[i].period, &period, sizeof period)) {
                 break;
             }
         }
 
-        if (i == LY_ARRAY_COUNT(config->cert_exp_notif_intervals)) {
+        if (i == LYA_COUNT(config->cert_exp_notif_intervals)) {
             ERR(NULL, "Trying to delete a non-existing certificate expiration notification interval.");
             return 1;
         }
         interval = &config->cert_exp_notif_intervals[i];
     } else if (op == NC_OP_CREATE) {
         /* create a new interval */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), config->cert_exp_notif_intervals, interval, 1);
+        LYA_ADD_ITEM(config->cert_exp_notif_intervals, interval, ERRMEM; return 1);
     } else {
         ERR(NULL, "Unsupported operation of node \"%s\".", LYD_NAME(node));
         return 1;
@@ -5264,11 +5263,11 @@ config_cert_exp_notif_interval(const struct lyd_node *node, enum nc_operation pa
 
     /* all children processed, we can now delete the interval */
     if (op == NC_OP_DELETE) {
-        if (i < LY_ARRAY_COUNT(config->cert_exp_notif_intervals) - 1) {
+        if (i < LYA_COUNT(config->cert_exp_notif_intervals) - 1) {
             config->cert_exp_notif_intervals[i] =
-                    config->cert_exp_notif_intervals[LY_ARRAY_COUNT(config->cert_exp_notif_intervals) - 1];
+                    config->cert_exp_notif_intervals[LYA_COUNT(config->cert_exp_notif_intervals) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(config->cert_exp_notif_intervals);
+        LYA_DECREMENT_FREE(config->cert_exp_notif_intervals);
     }
 
     return 0;
@@ -5309,34 +5308,34 @@ config_ignored_hello_module(const struct lyd_node *node, enum nc_operation paren
 
     if (op == NC_OP_DELETE) {
         /* find the module we are deleting */
-        LY_ARRAY_FOR(config->ignored_modules, i) {
+        LYA_FOR(config->ignored_modules, i) {
             if (!strcmp(config->ignored_modules[i], module)) {
                 break;
             }
         }
-        if (i == LY_ARRAY_COUNT(config->ignored_modules)) {
+        if (i == LYA_COUNT(config->ignored_modules)) {
             ERR(NULL, "Trying to delete a non-existing ignored-hello-module \"%s\".", module);
             return 1;
         }
         free(config->ignored_modules[i]);
-        if (i < LY_ARRAY_COUNT(config->ignored_modules) - 1) {
-            config->ignored_modules[i] = config->ignored_modules[LY_ARRAY_COUNT(config->ignored_modules) - 1];
+        if (i < LYA_COUNT(config->ignored_modules) - 1) {
+            config->ignored_modules[i] = config->ignored_modules[LYA_COUNT(config->ignored_modules) - 1];
         }
-        LY_ARRAY_DECREMENT_FREE(config->ignored_modules);
+        LYA_DECREMENT_FREE(config->ignored_modules);
     } else if ((op == NC_OP_CREATE) || (op == NC_OP_REPLACE)) {
         /* check if the module is not already present */
-        LY_ARRAY_FOR(config->ignored_modules, i) {
+        LYA_FOR(config->ignored_modules, i) {
             if (!strcmp(config->ignored_modules[i], module)) {
                 break;
             }
         }
-        if (i < LY_ARRAY_COUNT(config->ignored_modules)) {
+        if (i < LYA_COUNT(config->ignored_modules)) {
             ERR(NULL, "Trying to add an already existing ignored-hello-module \"%s\".", module);
             return 1;
         }
 
         /* add the new module */
-        LY_ARRAY_NEW_RET(LYD_CTX(node), config->ignored_modules, new_ignored_module, 1);
+        LYA_ADD_ITEM(config->ignored_modules, new_ignored_module, ERRMEM; return 1);
         *new_ignored_module = strdup(module);
         NC_CHECK_ERRMEM_RET(!*new_ignored_module, 1);
     }
@@ -5440,8 +5439,8 @@ nc_server_config_ssh_dup(const struct nc_server_ssh_opts *src, struct nc_server_
     NC_CHECK_ERRMEM_RET(!*dst, 1);
 
     /* dup host keys */
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP((*dst)->hostkeys, LY_ARRAY_COUNT(src->hostkeys), rc, cleanup);
-    LY_ARRAY_FOR(src->hostkeys, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP((*dst)->hostkeys, LYA_COUNT(src->hostkeys), rc, cleanup);
+    LYA_FOR(src->hostkeys, i) {
         src_hostkey = &src->hostkeys[i];
         dst_hostkey = &(*dst)->hostkeys[i];
 
@@ -5470,12 +5469,12 @@ nc_server_config_ssh_dup(const struct nc_server_ssh_opts *src, struct nc_server_
             NC_CHECK_ERRMEM_GOTO(!dst_hostkey->ks_ref, rc = 1, cleanup);
         }
 
-        LY_ARRAY_INCREMENT((*dst)->hostkeys);
+        LYA_INCREMENT((*dst)->hostkeys);
     }
 
     /* dup auth clients */
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP((*dst)->auth_clients, LY_ARRAY_COUNT(src->auth_clients), rc, cleanup);
-    LY_ARRAY_FOR(src->auth_clients, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP((*dst)->auth_clients, LYA_COUNT(src->auth_clients), rc, cleanup);
+    LYA_FOR(src->auth_clients, i) {
         src_auth_client = &src->auth_clients[i];
         dst_auth_client = &(*dst)->auth_clients[i];
 
@@ -5485,14 +5484,14 @@ nc_server_config_ssh_dup(const struct nc_server_ssh_opts *src, struct nc_server_
         dst_auth_client->pubkey_store = src_auth_client->pubkey_store;
         if (src_auth_client->pubkey_store == NC_STORE_LOCAL) {
             LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_auth_client->pubkeys,
-                    LY_ARRAY_COUNT(src_auth_client->pubkeys), rc, cleanup);
-            LY_ARRAY_FOR(src_auth_client->pubkeys, j) {
+                    LYA_COUNT(src_auth_client->pubkeys), rc, cleanup);
+            LYA_FOR(src_auth_client->pubkeys, j) {
                 dst_auth_client->pubkeys[j].name = strdup(src_auth_client->pubkeys[j].name);
                 NC_CHECK_ERRMEM_GOTO(!dst_auth_client->pubkeys[j].name, rc = 1, cleanup);
                 dst_auth_client->pubkeys[j].type = src_auth_client->pubkeys[j].type;
                 dst_auth_client->pubkeys[j].data = strdup(src_auth_client->pubkeys[j].data);
                 NC_CHECK_ERRMEM_GOTO(!dst_auth_client->pubkeys[j].data, rc = 1, cleanup);
-                LY_ARRAY_INCREMENT(dst_auth_client->pubkeys);
+                LYA_INCREMENT(dst_auth_client->pubkeys);
             }
         } else if (src_auth_client->pubkey_store == NC_STORE_TRUSTSTORE) {
             dst_auth_client->ts_ref = strdup(src_auth_client->ts_ref);
@@ -5507,7 +5506,7 @@ nc_server_config_ssh_dup(const struct nc_server_ssh_opts *src, struct nc_server_
         dst_auth_client->kbdint_method = src_auth_client->kbdint_method;
         dst_auth_client->none_enabled = src_auth_client->none_enabled;
 
-        LY_ARRAY_INCREMENT((*dst)->auth_clients);
+        LYA_INCREMENT((*dst)->auth_clients);
     }
 
     if (src->referenced_endpt_name) {
@@ -5590,13 +5589,13 @@ nc_server_config_tls_dup(const struct nc_server_tls_opts *src, struct nc_server_
 
     dst_ca->ca_certs_store = src_ca->ca_certs_store;
     if (src_ca->ca_certs_store == NC_STORE_LOCAL) {
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_ca->ca_certs, LY_ARRAY_COUNT(src_ca->ca_certs), rc, cleanup);
-        LY_ARRAY_FOR(src_ca->ca_certs, i) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_ca->ca_certs, LYA_COUNT(src_ca->ca_certs), rc, cleanup);
+        LYA_FOR(src_ca->ca_certs, i) {
             dst_ca->ca_certs[i].name = strdup(src_ca->ca_certs[i].name);
             NC_CHECK_ERRMEM_GOTO(!dst_ca->ca_certs[i].name, rc = 1, cleanup);
             dst_ca->ca_certs[i].data = strdup(src_ca->ca_certs[i].data);
             NC_CHECK_ERRMEM_GOTO(!dst_ca->ca_certs[i].data, rc = 1, cleanup);
-            LY_ARRAY_INCREMENT(dst_ca->ca_certs);
+            LYA_INCREMENT(dst_ca->ca_certs);
         }
     } else if (src_ca->ca_certs_store == NC_STORE_TRUSTSTORE) {
         dst_ca->ca_cert_bag_ts_ref = strdup(src_ca->ca_cert_bag_ts_ref);
@@ -5605,13 +5604,13 @@ nc_server_config_tls_dup(const struct nc_server_tls_opts *src, struct nc_server_
 
     dst_ca->ee_certs_store = src_ca->ee_certs_store;
     if (src_ca->ee_certs_store == NC_STORE_LOCAL) {
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_ca->ee_certs, LY_ARRAY_COUNT(src_ca->ee_certs), rc, cleanup);
-        LY_ARRAY_FOR(src_ca->ee_certs, i) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_ca->ee_certs, LYA_COUNT(src_ca->ee_certs), rc, cleanup);
+        LYA_FOR(src_ca->ee_certs, i) {
             dst_ca->ee_certs[i].name = strdup(src_ca->ee_certs[i].name);
             NC_CHECK_ERRMEM_GOTO(!dst_ca->ee_certs[i].name, rc = 1, cleanup);
             dst_ca->ee_certs[i].data = strdup(src_ca->ee_certs[i].data);
             NC_CHECK_ERRMEM_GOTO(!dst_ca->ee_certs[i].data, rc = 1, cleanup);
-            LY_ARRAY_INCREMENT(dst_ca->ee_certs);
+            LYA_INCREMENT(dst_ca->ee_certs);
         }
     } else if (src_ca->ee_certs_store == NC_STORE_TRUSTSTORE) {
         dst_ca->ee_cert_bag_ts_ref = strdup(src_ca->ee_cert_bag_ts_ref);
@@ -5706,21 +5705,21 @@ nc_server_config_unix_dup(const struct nc_server_unix_opts *src, struct nc_serve
     (*dst)->uid = src->uid;
     (*dst)->gid = src->gid;
 
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP((*dst)->user_mappings, LY_ARRAY_COUNT(src->user_mappings), rc, cleanup);
-    LY_ARRAY_FOR(src->user_mappings, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP((*dst)->user_mappings, LYA_COUNT(src->user_mappings), rc, cleanup);
+    LYA_FOR(src->user_mappings, i) {
         src_um = &src->user_mappings[i];
         dst_um = &(*dst)->user_mappings[i];
 
         dst_um->system_user = strdup(src_um->system_user);
         NC_CHECK_ERRMEM_GOTO(!dst_um->system_user, rc = 1, cleanup);
 
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_um->allowed_users, LY_ARRAY_COUNT(src_um->allowed_users), rc, cleanup);
-        LY_ARRAY_FOR(src_um->allowed_users, j) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_um->allowed_users, LYA_COUNT(src_um->allowed_users), rc, cleanup);
+        LYA_FOR(src_um->allowed_users, j) {
             dst_um->allowed_users[j] = strdup(src_um->allowed_users[j]);
             NC_CHECK_ERRMEM_GOTO(!dst_um->allowed_users[j], rc = 1, cleanup);
-            LY_ARRAY_INCREMENT(dst_um->allowed_users);
+            LYA_INCREMENT(dst_um->allowed_users);
         }
-        LY_ARRAY_INCREMENT((*dst)->user_mappings);
+        LYA_INCREMENT((*dst)->user_mappings);
     }
 
 cleanup:
@@ -5750,8 +5749,8 @@ nc_server_config_keystore_dup(const struct nc_keystore *src, struct nc_keystore 
     const struct nc_certificate *src_cert;
     struct nc_certificate *dst_cert;
 
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->entries, LY_ARRAY_COUNT(src->entries), rc, cleanup);
-    LY_ARRAY_FOR(src->entries, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->entries, LYA_COUNT(src->entries), rc, cleanup);
+    LYA_FOR(src->entries, i) {
         src_entry = &src->entries[i];
         dst_entry = &dst->entries[i];
 
@@ -5770,8 +5769,8 @@ nc_server_config_keystore_dup(const struct nc_keystore *src, struct nc_keystore 
             NC_CHECK_ERRMEM_GOTO(!dst_entry->asym_key.pubkey.data, rc = 1, cleanup);
         }
 
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_entry->certs, LY_ARRAY_COUNT(src_entry->certs), rc, cleanup);
-        LY_ARRAY_FOR(src_entry->certs, j) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_entry->certs, LYA_COUNT(src_entry->certs), rc, cleanup);
+        LYA_FOR(src_entry->certs, j) {
             src_cert = &src_entry->certs[j];
             dst_cert = &dst_entry->certs[j];
 
@@ -5783,10 +5782,10 @@ nc_server_config_keystore_dup(const struct nc_keystore *src, struct nc_keystore 
                 NC_CHECK_ERRMEM_GOTO(!dst_cert->data, rc = 1, cleanup);
             }
 
-            LY_ARRAY_INCREMENT(dst_entry->certs);
+            LYA_INCREMENT(dst_entry->certs);
         }
 
-        LY_ARRAY_INCREMENT(dst->entries);
+        LYA_INCREMENT(dst->entries);
     }
 
 cleanup:
@@ -5807,7 +5806,7 @@ static int
 nc_server_config_truststore_dup(const struct nc_truststore *src, struct nc_truststore *dst)
 {
     int rc = 0;
-    LY_ARRAY_COUNT_TYPE i = 0, j = 0;
+    LYA_COUNT_T i = 0, j = 0;
     const struct nc_certificate_bag *src_cbag;
     struct nc_certificate_bag *dst_cbag;
     const struct nc_certificate *src_cert;
@@ -5818,8 +5817,8 @@ nc_server_config_truststore_dup(const struct nc_truststore *src, struct nc_trust
     struct nc_public_key *dst_pk;
 
     /* copy certificate bags */
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->cert_bags, LY_ARRAY_COUNT(src->cert_bags), rc, cleanup);
-    LY_ARRAY_FOR(src->cert_bags, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->cert_bags, LYA_COUNT(src->cert_bags), rc, cleanup);
+    LYA_FOR(src->cert_bags, i) {
         src_cbag = &src->cert_bags[i];
         dst_cbag = &dst->cert_bags[i];
 
@@ -5831,8 +5830,8 @@ nc_server_config_truststore_dup(const struct nc_truststore *src, struct nc_trust
             NC_CHECK_ERRMEM_GOTO(!dst_cbag->description, rc = 1, cleanup);
         }
 
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_cbag->certs, LY_ARRAY_COUNT(src_cbag->certs), rc, cleanup);
-        LY_ARRAY_FOR(src_cbag->certs, j) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_cbag->certs, LYA_COUNT(src_cbag->certs), rc, cleanup);
+        LYA_FOR(src_cbag->certs, j) {
             src_cert = &src_cbag->certs[j];
             dst_cert = &dst_cbag->certs[j];
 
@@ -5844,15 +5843,15 @@ nc_server_config_truststore_dup(const struct nc_truststore *src, struct nc_trust
                 NC_CHECK_ERRMEM_GOTO(!dst_cert->data, rc = 1, cleanup);
             }
 
-            LY_ARRAY_INCREMENT(dst_cbag->certs);
+            LYA_INCREMENT(dst_cbag->certs);
         }
 
-        LY_ARRAY_INCREMENT(dst->cert_bags);
+        LYA_INCREMENT(dst->cert_bags);
     }
 
     /* copy public key bags */
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->pubkey_bags, LY_ARRAY_COUNT(src->pubkey_bags), rc, cleanup);
-    LY_ARRAY_FOR(src->pubkey_bags, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->pubkey_bags, LYA_COUNT(src->pubkey_bags), rc, cleanup);
+    LYA_FOR(src->pubkey_bags, i) {
         src_pkbag = &src->pubkey_bags[i];
         dst_pkbag = &dst->pubkey_bags[i];
 
@@ -5864,8 +5863,8 @@ nc_server_config_truststore_dup(const struct nc_truststore *src, struct nc_trust
             NC_CHECK_ERRMEM_GOTO(!dst_pkbag->description, rc = 1, cleanup);
         }
 
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_pkbag->pubkeys, LY_ARRAY_COUNT(src_pkbag->pubkeys), rc, cleanup);
-        LY_ARRAY_FOR(src_pkbag->pubkeys, j) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_pkbag->pubkeys, LYA_COUNT(src_pkbag->pubkeys), rc, cleanup);
+        LYA_FOR(src_pkbag->pubkeys, j) {
             src_pk = &src_pkbag->pubkeys[j];
             dst_pk = &dst_pkbag->pubkeys[j];
 
@@ -5877,10 +5876,10 @@ nc_server_config_truststore_dup(const struct nc_truststore *src, struct nc_trust
                 NC_CHECK_ERRMEM_GOTO(!dst_pk->data, rc = 1, cleanup);
             }
 
-            LY_ARRAY_INCREMENT(dst_pkbag->pubkeys);
+            LYA_INCREMENT(dst_pkbag->pubkeys);
         }
 
-        LY_ARRAY_INCREMENT(dst->pubkey_bags);
+        LYA_INCREMENT(dst->pubkey_bags);
     }
 
 cleanup:
@@ -5914,16 +5913,16 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
     struct nc_ch_endpt *dst_ch_endpt;
 
     dst->idle_timeout = src->idle_timeout;
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->ignored_modules, LY_ARRAY_COUNT(src->ignored_modules), rc, cleanup);
-    LY_ARRAY_FOR(src->ignored_modules, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->ignored_modules, LYA_COUNT(src->ignored_modules), rc, cleanup);
+    LYA_FOR(src->ignored_modules, i) {
         dst->ignored_modules[i] = strdup(src->ignored_modules[i]);
         NC_CHECK_ERRMEM_GOTO(!dst->ignored_modules[i], rc = 1, cleanup);
-        LY_ARRAY_INCREMENT(dst->ignored_modules);
+        LYA_INCREMENT(dst->ignored_modules);
     }
 
     /* endpoints */
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->endpts, LY_ARRAY_COUNT(src->endpts), rc, cleanup);
-    LY_ARRAY_FOR(src->endpts, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->endpts, LYA_COUNT(src->endpts), rc, cleanup);
+    LYA_FOR(src->endpts, i) {
         src_endpt = &src->endpts[i];
         dst_endpt = &dst->endpts[i];
 
@@ -5931,14 +5930,14 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
         NC_CHECK_ERRMEM_GOTO(!dst_endpt->name, rc = 1, cleanup);
 
         /* binds */
-        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_endpt->binds, LY_ARRAY_COUNT(src_endpt->binds), rc, cleanup);
-        LY_ARRAY_FOR(src_endpt->binds, j) {
+        LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_endpt->binds, LYA_COUNT(src_endpt->binds), rc, cleanup);
+        LYA_FOR(src_endpt->binds, j) {
             if (src_endpt->binds[j].address) {
                 dst_endpt->binds[j].address = strdup(src_endpt->binds[j].address);
                 NC_CHECK_ERRMEM_GOTO(!dst_endpt->binds[j].address, rc = 1, cleanup);
             }
             dst_endpt->binds[j].port = src_endpt->binds[j].port;
-            LY_ARRAY_INCREMENT(dst_endpt->binds);
+            LYA_INCREMENT(dst_endpt->binds);
         }
 
         dst_endpt->ka = src_endpt->ka;
@@ -5963,12 +5962,12 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
             break;
         }
 
-        LY_ARRAY_INCREMENT(dst->endpts);
+        LYA_INCREMENT(dst->endpts);
     }
 
     /* call-home clients */
-    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->ch_clients, LY_ARRAY_COUNT(src->ch_clients), rc, cleanup);
-    LY_ARRAY_FOR(src->ch_clients, i) {
+    LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->ch_clients, LYA_COUNT(src->ch_clients), rc, cleanup);
+    LYA_FOR(src->ch_clients, i) {
         src_ch_client = &src->ch_clients[i];
         dst_ch_client = &dst->ch_clients[i];
 
@@ -5977,8 +5976,8 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
 
         /* ch endpoints */
         LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst_ch_client->ch_endpts,
-                LY_ARRAY_COUNT(src_ch_client->ch_endpts), rc, cleanup);
-        LY_ARRAY_FOR(src_ch_client->ch_endpts, j) {
+                LYA_COUNT(src_ch_client->ch_endpts), rc, cleanup);
+        LYA_FOR(src_ch_client->ch_endpts, j) {
             src_ch_endpt = &src_ch_client->ch_endpts[j];
             dst_ch_endpt = &dst_ch_client->ch_endpts[j];
 
@@ -6015,7 +6014,7 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
                 break;
             }
 
-            LY_ARRAY_INCREMENT(dst_ch_client->ch_endpts);
+            LYA_INCREMENT(dst_ch_client->ch_endpts);
         }
 
         dst_ch_client->conn_type = src_ch_client->conn_type;
@@ -6029,7 +6028,7 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
         dst_ch_client->max_attempts = src_ch_client->max_attempts;
         dst_ch_client->max_wait = src_ch_client->max_wait;
 
-        LY_ARRAY_INCREMENT(dst->ch_clients);
+        LYA_INCREMENT(dst->ch_clients);
     }
 
 #ifdef NC_ENABLED_SSH_TLS
@@ -6043,10 +6042,10 @@ nc_server_config_dup(const struct nc_server_config *src, struct nc_server_config
 
     /* dup cert expiration notif intervals */
     LN2_LY_ARRAY_CREATE_GOTO_WRAP(dst->cert_exp_notif_intervals,
-            LY_ARRAY_COUNT(src->cert_exp_notif_intervals), rc, cleanup);
-    LY_ARRAY_FOR(src->cert_exp_notif_intervals, i) {
+            LYA_COUNT(src->cert_exp_notif_intervals), rc, cleanup);
+    LYA_FOR(src->cert_exp_notif_intervals, i) {
         dst->cert_exp_notif_intervals[i] = src->cert_exp_notif_intervals[i];
-        LY_ARRAY_INCREMENT(dst->cert_exp_notif_intervals);
+        LYA_INCREMENT(dst->cert_exp_notif_intervals);
     }
 #endif /* NC_ENABLED_SSH_TLS */
 
@@ -6570,7 +6569,7 @@ nc_server_config_oper_get_user_password_last_modified(const char *ch_client, con
         const char *username, time_t *last_modified)
 {
     int rc = 0;
-    LY_ARRAY_COUNT_TYPE i = 0, u;
+    LYA_COUNT_T i = 0, u;
     const struct nc_server_config *config;
     struct nc_server_ssh_opts *ssh_opts = NULL;
     const struct nc_endpt *endpt = NULL;
@@ -6589,7 +6588,7 @@ nc_server_config_oper_get_user_password_last_modified(const char *ch_client, con
 
     if (ch_client) {
         /* find the call-home client */
-        LY_ARRAY_FOR(config->ch_clients, u) {
+        LYA_FOR(config->ch_clients, u) {
             if (!strcmp(config->ch_clients[u].name, ch_client)) {
                 client = &config->ch_clients[u];
                 break;
@@ -6602,7 +6601,7 @@ nc_server_config_oper_get_user_password_last_modified(const char *ch_client, con
         }
 
         /* find the endpoint */
-        LY_ARRAY_FOR(client->ch_endpts, u) {
+        LYA_FOR(client->ch_endpts, u) {
             ch_endpt = &client->ch_endpts[u];
             if (!strcmp(ch_endpt->name, endpoint) && (ch_endpt->ti == NC_TI_SSH)) {
                 ssh_opts = ch_endpt->opts.ssh;
@@ -6617,7 +6616,7 @@ nc_server_config_oper_get_user_password_last_modified(const char *ch_client, con
         }
     } else {
         /* no call-home client specified, search in listening endpoints */
-        LY_ARRAY_FOR(config->endpts, u) {
+        LYA_FOR(config->endpts, u) {
             endpt = &config->endpts[u];
             if (!strcmp(endpt->name, endpoint) && (endpt->ti == NC_TI_SSH)) {
                 ssh_opts = endpt->opts.ssh;
@@ -6633,13 +6632,13 @@ nc_server_config_oper_get_user_password_last_modified(const char *ch_client, con
     }
 
     /* find the SSH user */
-    LY_ARRAY_FOR(ssh_opts->auth_clients, i) {
+    LYA_FOR(ssh_opts->auth_clients, i) {
         if (!strcmp(ssh_opts->auth_clients[i].username, username)) {
             found_time = ssh_opts->auth_clients[i].password_last_modified;
             break;
         }
     }
-    if (i == LY_ARRAY_COUNT(ssh_opts->auth_clients)) {
+    if (i == LYA_COUNT(ssh_opts->auth_clients)) {
         ERR(NULL, "SSH user '%s' not found on endpoint '%s'.", username, endpoint);
         rc = 1;
         goto cleanup;
